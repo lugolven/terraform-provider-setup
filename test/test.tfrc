@@ -1,0 +1,8 @@
+provider_installation {
+  dev_overrides {
+      "setup" = "$GOBIN"
+  }
+
+  direct {}
+
+}

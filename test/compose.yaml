@@ -1,0 +1,6 @@
+services:
+  target:
+    build:
+      context: image
+    ports:
+      - "1234:22"
