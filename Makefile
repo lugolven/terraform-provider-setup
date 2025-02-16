@@ -47,9 +47,18 @@ bin/tools/gh:bin/tools
 	mv bin/tools/gh_2.65.0_linux_arm64/bin/gh bin/tools/gh 
 	rm -rf bin/tools/gh_2.65.0_linux_arm64
 
-draft-release: bin/tools/gh crossplatform-build
-	$(eval VERSION="v0.$(shell date +"%Y%m%d%H%M")")
-	bin/tools/gh release create ${VERSION} --title ${VERSION} --draft --prerelease --generate-notes bin/terraform-provider-setup-*.zip 
+github_token_env: 
+	export GITHUB_TOKEN=$(bin/tools/gh auth token || bin/tools/gh auth login)
+
+draft-release: bin/tools/gh bin/tools/goreleaser
+	$(eval VERSION="v0.0.$(shell date +"%Y%m%d%H%M")")
+	git tag -a $(VERSION) -m "Release $(VERSION)" || true
+	git push origin $(VERSION)
+	GITHUB_TOKEN=`bin/tools/gh auth token || bin/tools/gh auth login` bin/tools/goreleaser release
+	 
+bin/tools/goreleaser: bin/tools
+	# todo: stop using latest and use a fixed version
+	GOBIN=${ROOT_DIR}/bin/tools/ go install github.com/goreleaser/goreleaser/v2@latest
 
 clean:
 	rm -rf bin
