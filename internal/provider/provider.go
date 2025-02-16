@@ -14,18 +14,18 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ provider.Provider = &internalPorvider{}
+	_ provider.Provider = &internalProvider{}
 )
 
 // NewProvider is a helper function to simplify provider server and testing implementation.
 func NewProvider() func() provider.Provider {
 	return func() provider.Provider {
-		return &internalPorvider{}
+		return &internalProvider{}
 	}
 }
 
-// internalPorvider is the provider implementation.
-type internalPorvider struct {
+// internalProvider is the provider implementation.
+type internalProvider struct {
 	sshClient *ssh.Client
 }
 
@@ -37,12 +37,12 @@ type providerData struct {
 }
 
 // Metadata returns the provider type name.
-func (p *internalPorvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *internalProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "setup"
 }
 
 // Schema defines the provider-level schema for configuration data.
-func (p *internalPorvider) Schema(ctx context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *internalProvider) Schema(ctx context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Sets up bare-metal machines.",
 		Attributes: map[string]schema.Attribute{
@@ -66,7 +66,7 @@ func (p *internalPorvider) Schema(ctx context.Context, _ provider.SchemaRequest,
 	}
 }
 
-func (p *internalPorvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+func (p *internalProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data providerData
 	diags := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -79,7 +79,7 @@ func (p *internalPorvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	p.sshClient, err = createSshClient(ctx, data.User.ValueString(), data.Private_key.ValueString(), data.Host.ValueString(), port)
+	p.sshClient, err = createSshClient(data.User.ValueString(), data.Private_key.ValueString(), data.Host.ValueString(), port)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create SSH client", err.Error())
 		return
@@ -87,12 +87,12 @@ func (p *internalPorvider) Configure(ctx context.Context, req provider.Configure
 }
 
 // DataSources defines the data sources implemented in the provider.
-func (p *internalPorvider) DataSources(_ context.Context) []func() datasource.DataSource {
+func (p *internalProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{}
 }
 
 // Resources defines the resources implemented in the provider.
-func (p *internalPorvider) Resources(_ context.Context) []func() resource.Resource {
+func (p *internalProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		p.newUserResource,
 		p.newGroupResource,
@@ -100,14 +100,14 @@ func (p *internalPorvider) Resources(_ context.Context) []func() resource.Resour
 	}
 }
 
-func (p *internalPorvider) newUserResource() resource.Resource {
+func (p *internalProvider) newUserResource() resource.Resource {
 	return NewUserResource(p)
 }
 
-func (p *internalPorvider) newGroupResource() resource.Resource {
+func (p *internalProvider) newGroupResource() resource.Resource {
 	return NewGroupResource(p)
 }
 
-func (p *internalPorvider) newDirectoryResource() resource.Resource {
+func (p *internalProvider) newDirectoryResource() resource.Resource {
 	return NewDirectoryResource(p)
 }

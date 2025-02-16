@@ -20,7 +20,7 @@ import (
 var _ resource.Resource = &UserResource{}
 var _ resource.ResourceWithImportState = &UserResource{}
 
-func NewUserResource(p *internalPorvider) resource.Resource {
+func NewUserResource(p *internalProvider) resource.Resource {
 	return &UserResource{
 		provider: p,
 	}
@@ -28,7 +28,7 @@ func NewUserResource(p *internalPorvider) resource.Resource {
 
 // UserResource defines the resource implementation.
 type UserResource struct {
-	provider *internalPorvider
+	provider *internalProvider
 }
 
 type userResourceModel struct {
@@ -177,7 +177,7 @@ func (user *UserResource) getUid(ctx context.Context, name string) (int64, error
 
 	out, err := session.CombinedOutput("cat /etc/passwd")
 	if err != nil {
-		return 0, fmt.Errorf("Failed to get passwd file: %w.\n out= %s", err, out)
+		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
 	name = strings.Replace(name, "\"", "", -1)
 	tflog.Debug(ctx, "name: "+name)
@@ -189,7 +189,7 @@ func (user *UserResource) getUid(ctx context.Context, name string) (int64, error
 			stringId := line_parts[2]
 			id, err := strconv.ParseInt(stringId, 10, 64)
 			if err != nil {
-				return 0, fmt.Errorf("Failed to parse uid ('%s'): %w", stringId, err)
+				return 0, fmt.Errorf("failed to parse uid ('%s'): %w", stringId, err)
 			}
 			return id, nil
 		} else {
@@ -197,7 +197,7 @@ func (user *UserResource) getUid(ctx context.Context, name string) (int64, error
 		}
 	}
 
-	return 0, fmt.Errorf("User not found")
+	return 0, fmt.Errorf("user not found")
 }
 
 func (user *UserResource) addUserToGroup(ctx context.Context, name string, group string) error {
@@ -209,7 +209,7 @@ func (user *UserResource) addUserToGroup(ctx context.Context, name string, group
 	tflog.Warn(ctx, "Adding user to group with command: "+command)
 	_, err = session.CombinedOutput(command)
 	if err != nil {
-		return fmt.Errorf("Failed to add user to group: %w", err)
+		return fmt.Errorf("failed to add user to group: %w", err)
 	}
 	return nil
 }
