@@ -33,32 +33,7 @@ test/image/authorized_keys: .ssh/id_rsa.pub
 	ssh-keygen -t rsa -b 4096 -f .ssh/id_rsa -N ""
 
 
-build-%:
-	GOOS=$(shell echo "$*" | cut -d "-" -f 1) GOARCH=$(shell echo "$*" | cut -d "-" -f 2) go build -o bin/$*/terraform-provider-setup .
-	zip -j bin/terraform-provider-setup-$*.zip bin/$*/terraform-provider-setup
 
-crossplatform-build: build-linux-amd64 build-linux-arm64 build-darwin-amd64 build-darwin-arm64
-
-bin/tools:
-	mkdir -p bin/tools
-
-bin/tools/gh:bin/tools
-	curl -sL https://github.com/cli/cli/releases/download/v2.65.0/gh_2.65.0_linux_arm64.tar.gz | tar -xz -C bin/tools gh_2.65.0_linux_arm64/bin/gh 
-	mv bin/tools/gh_2.65.0_linux_arm64/bin/gh bin/tools/gh 
-	rm -rf bin/tools/gh_2.65.0_linux_arm64
-
-github_token_env: 
-	export GITHUB_TOKEN=$(bin/tools/gh auth token || bin/tools/gh auth login)
-
-draft-release: bin/tools/gh bin/tools/goreleaser
-	$(eval VERSION="v0.0.$(shell date +"%Y%m%d%H%M")")
-	git tag -a $(VERSION) -m "Release $(VERSION)" || true
-	git push origin $(VERSION)
-	GITHUB_TOKEN=`bin/tools/gh auth token || bin/tools/gh auth login` bin/tools/goreleaser release
-	 
-bin/tools/goreleaser: bin/tools
-	# todo: stop using latest and use a fixed version
-	GOBIN=${ROOT_DIR}/bin/tools/ go install github.com/goreleaser/goreleaser/v2@latest
 
 clean:
 	rm -rf bin
