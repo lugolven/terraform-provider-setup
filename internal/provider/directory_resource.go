@@ -17,7 +17,7 @@ import (
 var _ resource.Resource = &DirectoryResource{}
 var _ resource.ResourceWithImportState = &DirectoryResource{}
 
-func NewDirectoryResource(p *internalPorvider) resource.Resource {
+func NewDirectoryResource(p *internalProvider) resource.Resource {
 	return &DirectoryResource{
 		provider: p,
 	}
@@ -25,7 +25,7 @@ func NewDirectoryResource(p *internalPorvider) resource.Resource {
 
 // DirectoryResource defines the resource implementation.
 type DirectoryResource struct {
-	provider *internalPorvider
+	provider *internalProvider
 }
 
 type directoryResourceModel struct {

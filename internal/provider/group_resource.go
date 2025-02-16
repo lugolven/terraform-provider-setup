@@ -20,7 +20,7 @@ import (
 var _ resource.Resource = &GroupResource{}
 var _ resource.ResourceWithImportState = &GroupResource{}
 
-func NewGroupResource(p *internalPorvider) resource.Resource {
+func NewGroupResource(p *internalProvider) resource.Resource {
 	return &GroupResource{
 		provider: p,
 	}
@@ -28,7 +28,7 @@ func NewGroupResource(p *internalPorvider) resource.Resource {
 
 // GroupResource defines the resource implementation.
 type GroupResource struct {
-	provider *internalPorvider
+	provider *internalProvider
 }
 
 type groupResourceModel struct {
@@ -161,7 +161,7 @@ func (group *GroupResource) getGid(ctx context.Context, name string) (int64, err
 
 	out, err := session.CombinedOutput("getent group")
 	if err != nil {
-		return 0, fmt.Errorf("Failed to get passwd file: %w.\n out= %s", err, out)
+		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
 	name = strings.Replace(name, "\"", "", -1)
 	tflog.Debug(ctx, "name: "+name)
@@ -173,7 +173,7 @@ func (group *GroupResource) getGid(ctx context.Context, name string) (int64, err
 			stringId := line_parts[2]
 			id, err := strconv.ParseInt(stringId, 10, 64)
 			if err != nil {
-				return 0, fmt.Errorf("Failed to parse gid ('%s'): %w", stringId, err)
+				return 0, fmt.Errorf("failed to parse gid ('%s'): %w", stringId, err)
 			}
 			return id, nil
 		} else {
@@ -181,5 +181,5 @@ func (group *GroupResource) getGid(ctx context.Context, name string) (int64, err
 		}
 	}
 
-	return 0, fmt.Errorf("Group not found")
+	return 0, fmt.Errorf("group not found")
 }

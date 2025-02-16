@@ -1,15 +1,14 @@
 package provider
 
 import (
-	"context"
 	"fmt"
-	"io/ioutil"
+
 	"os"
 
 	"golang.org/x/crypto/ssh"
 )
 
-func createSshClient(ctx context.Context, user string, publicKeyFilePath string, host string, port int) (*ssh.Client, error) {
+func createSshClient(user string, publicKeyFilePath string, host string, port int) (*ssh.Client, error) {
 	publicKeyFile, err := PublicKeyFile(publicKeyFilePath)
 	if err != nil {
 		pwd := os.Getenv("PWD")
@@ -33,7 +32,7 @@ func createSshClient(ctx context.Context, user string, publicKeyFilePath string,
 
 // func that load a public key from a file
 func PublicKeyFile(file string) (ssh.AuthMethod, error) {
-	buffer, err := ioutil.ReadFile(file)
+	buffer, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
