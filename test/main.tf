@@ -25,3 +25,10 @@ resource "setup_group" "somegroup" {
 resource "setup_group" "test" {
   name = "test-group"
 }
+
+resource "setup_directory" "test" {
+  path = "/tmp/test"
+  owner = setup_user.test.uid
+  group = setup_group.test.gid
+  mode = "0755"
+}

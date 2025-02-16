@@ -5,7 +5,7 @@ export GOBIN=${ROOT_DIR}/bin
 NPROCS = $(shell grep -c 'processor' /proc/cpuinfo)
 MAKEFLAGS += -j$(NPROCS)
 
-${GOBIN}/terraform-provider-setup: *.go go.*
+${GOBIN}/terraform-provider-setup: **.go go.*
 	go install
 
 build: ${GOBIN}/terraform-provider-setup
