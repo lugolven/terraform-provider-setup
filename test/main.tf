@@ -9,6 +9,8 @@ terraform {
 provider "setup" {
   private_key = "../.ssh/id_rsa"
   user = "test"
+  host = "localhost"
+  port = "1234"
 }
 
 resource "setup_user" "test" {
