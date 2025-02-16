@@ -96,6 +96,7 @@ func (p *internalPorvider) Resources(_ context.Context) []func() resource.Resour
 	return []func() resource.Resource{
 		p.newUserResource,
 		p.newGroupResource,
+		p.newDirectoryResource,
 	}
 }
 
@@ -105,4 +106,8 @@ func (p *internalPorvider) newUserResource() resource.Resource {
 
 func (p *internalPorvider) newGroupResource() resource.Resource {
 	return NewGroupResource(p)
+}
+
+func (p *internalPorvider) newDirectoryResource() resource.Resource {
+	return NewDirectoryResource(p)
 }
