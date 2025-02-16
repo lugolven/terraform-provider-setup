@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -8,9 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func createSshClient(user string, publicKeyFilePath string) (*ssh.Client, error) {
-	// todo: use public key authentication
-	// tood: get those values from the provider configuration
+func createSshClient(ctx context.Context, user string, publicKeyFilePath string, host string, port int) (*ssh.Client, error) {
 	publicKeyFile, err := PublicKeyFile(publicKeyFilePath)
 	if err != nil {
 		pwd := os.Getenv("PWD")
@@ -24,9 +23,12 @@ func createSshClient(user string, publicKeyFilePath string) (*ssh.Client, error)
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	conn, err := ssh.Dial("tcp", "localhost:1234", ssh_config)
-
-	return conn, err
+	addr := fmt.Sprintf("%v:%v", host, port)
+	conn, err := ssh.Dial("tcp", addr, ssh_config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
+	}
+	return conn, nil
 }
 
 // func that load a public key from a file

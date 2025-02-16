@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -31,6 +32,8 @@ type internalPorvider struct {
 type providerData struct {
 	Private_key types.String `tfsdk:"private_key"`
 	User        types.String `tfsdk:"user"`
+	Host        types.String `tfsdk:"host"`
+	Port        types.String `tfsdk:"port"`
 }
 
 // Metadata returns the provider type name.
@@ -51,6 +54,14 @@ func (p *internalPorvider) Schema(ctx context.Context, _ provider.SchemaRequest,
 				Description: "User to use for SSH authentication",
 				Required:    true,
 			},
+			"host": schema.StringAttribute{
+				Description: "Host to connect to",
+				Required:    true,
+			},
+			"port": schema.StringAttribute{
+				Description: "Port to connect to",
+				Required:    true,
+			},
 		},
 	}
 }
@@ -62,10 +73,13 @@ func (p *internalPorvider) Configure(ctx context.Context, req provider.Configure
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	port, err := strconv.Atoi(data.Port.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to convert port to int", err.Error())
+		return
+	}
 
-	var err error
-	p.sshClient, err = createSshClient(data.User.ValueString(), data.Private_key.ValueString())
-
+	p.sshClient, err = createSshClient(ctx, data.User.ValueString(), data.Private_key.ValueString(), data.Host.ValueString(), port)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create SSH client", err.Error())
 		return
