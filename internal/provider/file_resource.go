@@ -133,12 +133,24 @@ func (file *FileResource) Create(ctx context.Context, req resource.CreateRequest
 
 	bashCmd := "sudo chown " + plan.Owner.String() + ":" + plan.Group.String() + " " + plan.Path.String()
 	tflog.Warn(ctx, "Setting file owner and group with command: "+bashCmd)
-
+	session, err = file.provider.sshClient.NewSession()
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create ssh session", err.Error())
+		return
+	}
+	defer session.Close()
 	out, err := session.CombinedOutput(bashCmd)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to set file owner and group. Err="+err.Error()+"\nout = "+string(out), err.Error())
 		return
 	}
+
+	session, err = file.provider.sshClient.NewSession()
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create ssh session", err.Error())
+		return
+	}
+	defer session.Close()
 
 	// set the mode of the remote file
 	bashCmd = "sudo chmod " + plan.Mode.String() + " " + plan.Path.String()
