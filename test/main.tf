@@ -32,3 +32,12 @@ resource "setup_directory" "test" {
   group = setup_group.test.gid
   mode = "0755"
 }
+
+resource "setup_file" "test" {
+  path = "/tmp/test.txt"
+  owner = setup_user.test.uid
+  group = setup_group.test.gid
+  mode = "0644"
+  content = "Hello, World!"
+  depends_on = [ setup_directory.test ]
+}

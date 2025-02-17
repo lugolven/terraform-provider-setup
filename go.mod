@@ -11,6 +11,7 @@ require github.com/hashicorp/terraform-plugin-go v0.26.0 // indirect
 
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
+	github.com/bramvdbogaerde/go-scp v1.5.0
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
