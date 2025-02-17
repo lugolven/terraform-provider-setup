@@ -21,5 +21,8 @@ COPY ./authorized_keys /home/test/.ssh/authorized_keys
 
 EXPOSE 22
 
+RUN apt-get update && \
+    apt-get install -y vlc
+
 # Start SSH service
 CMD ["/usr/sbin/sshd", "-D", "-e"]

@@ -98,6 +98,7 @@ func (p *internalProvider) Resources(_ context.Context) []func() resource.Resour
 		p.newGroupResource,
 		p.newDirectoryResource,
 		p.newFileResource,
+		p.newAptResource,
 	}
 }
 
@@ -115,4 +116,8 @@ func (p *internalProvider) newDirectoryResource() resource.Resource {
 
 func (p *internalProvider) newFileResource() resource.Resource {
 	return NewFileResource(p)
+}
+
+func (p *internalProvider) newAptResource() resource.Resource {
+	return NewAptResource(p)
 }
