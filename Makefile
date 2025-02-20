@@ -15,6 +15,7 @@ tests: build ssh-key
 	go test -v ./...
 
 test-terraform: build
+	cd test && terraform init
 	cd test && TF_LOG=DEBUG terraform apply -auto-approve
 
 test-env: ssh-key test
