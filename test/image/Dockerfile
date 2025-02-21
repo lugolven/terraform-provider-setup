@@ -1,5 +1,6 @@
-FROM ubuntu:latest
 
+# todo: test this with other images such as debian
+FROM ubuntu:latest
 
 # Install SSH server
 RUN apt-get update && \

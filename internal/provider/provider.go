@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// todo:add integration tests
 // Ensure the implementation satisfies the expected interfaces.
 var (
 	_ provider.Provider = &internalProvider{}
@@ -33,6 +34,7 @@ type internalProvider struct {
 	sshClient *ssh.Client
 }
 
+// todo: add more validation of the attributes
 type providerData struct {
 	Private_key types.String `tfsdk:"private_key"`
 	User        types.String `tfsdk:"user"`

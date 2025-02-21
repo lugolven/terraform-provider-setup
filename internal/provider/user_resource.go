@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// todo:add integration tests
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &UserResource{}
 var _ resource.ResourceWithImportState = &UserResource{}
@@ -64,7 +65,7 @@ func (user *UserResource) Schema(ctx context.Context, req resource.SchemaRequest
 }
 
 func (user *UserResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-
+	// todo: implement me
 }
 
 func (user *UserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -140,7 +141,7 @@ func (user *UserResource) Read(ctx context.Context, req resource.ReadRequest, re
 }
 
 func (user *UserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// todo: implement update when a user is added to a group
+	// todo: implement me
 }
 
 func (user *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

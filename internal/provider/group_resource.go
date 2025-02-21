@@ -16,6 +16,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// todo:add integration tests
+
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &GroupResource{}
 var _ resource.ResourceWithImportState = &GroupResource{}
@@ -124,6 +126,7 @@ func (group *GroupResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 func (group *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// todo: implement me
 }
 
 func (group *GroupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
