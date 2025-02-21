@@ -145,9 +145,7 @@ func (aptPackage *AptPackageResource) listCurrentlyInstalledPackages(ctx context
 	}
 	defer session.Close()
 
-	cmd := "sudo apt list --installed"
-	tflog.Debug(ctx, "Listing installed apt packages with command: "+cmd)
-	out, err := session.CombinedOutput(cmd)
+	out, err := aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt list --installed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list installed apt packages. Err=%w\nout = %s", err, string(out))
 	}
@@ -168,30 +166,13 @@ func (aptPackage *AptPackageResource) ensureRemoved(ctx context.Context, toRemov
 		tflog.Debug(ctx, "No apt packages to remove")
 		return nil
 	}
-	session, err := aptPackage.provider.sshClient.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
 
-	cmd := "sudo apt-get remove -y " + strings.Join(toRemoved, " ")
-
-	tflog.Debug(ctx, "Removing apt packages with command: "+cmd)
-	out, err := session.CombinedOutput(cmd)
+	out, err := aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt-get remove -y "+strings.Join(toRemoved, " "))
 	if err != nil {
 		return fmt.Errorf("failed to remove apt packages. Err=%w\nout = %s", err, string(out))
 	}
 
-	session, err = aptPackage.provider.sshClient.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	cmd = "sudo apt autoremove -y"
-	tflog.Debug(ctx, "Auto-removing apt packages with command: "+cmd)
-
-	out, err = session.CombinedOutput(cmd)
+	out, err = aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt autoremove -y")
 	if err != nil {
 		return fmt.Errorf("failed to auto-remove apt packages. Err=%s\nout = %s", err, string(out))
 	}
@@ -205,16 +186,7 @@ func (aptPackage *AptPackageResource) ensureInstalled(ctx context.Context, toIns
 		return nil
 	}
 
-	session, err := aptPackage.provider.sshClient.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	cmd := "sudo apt update && sudo apt-get install -y " + strings.Join(toInstall, " ")
-
-	tflog.Debug(ctx, "Installing apt packages with command: "+cmd)
-	out, err := session.CombinedOutput(cmd)
+	out, err := aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt update && sudo apt-get install -y "+strings.Join(toInstall, " "))
 	if err != nil {
 		return fmt.Errorf("failed to install apt packages. Err=%w\nout = %s", err, string(out))
 	}

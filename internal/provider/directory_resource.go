@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // todo:add integration tests
@@ -77,17 +76,9 @@ func (directory *DirectoryResource) Create(ctx context.Context, req resource.Cre
 	if diags.HasError() {
 		return
 	}
-	session, err := directory.provider.sshClient.NewSession()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create ssh session", err.Error())
-		return
-	}
-	defer session.Close()
 
 	// todo: consider adding a configation for elevated actions
-	bashCmd := "sudo install -d -m " + plan.Mode.String() + " -o " + plan.Owner.String() + " -g " + plan.Group.String() + " " + plan.Path.String()
-	tflog.Warn(ctx, "Creating directory with command: "+bashCmd)
-	out, err := session.CombinedOutput(bashCmd)
+	out, err := directory.provider.sshClient.RunCommand(ctx, "sudo install -d -m "+plan.Mode.String()+" -o "+plan.Owner.String()+" -g "+plan.Group.String()+" "+plan.Path.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create directory. Err="+err.Error()+"\nout = "+string(out), err.Error())
 		return
@@ -121,14 +112,7 @@ func (directory *DirectoryResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	session, err := directory.provider.sshClient.NewSession()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create ssh session", err.Error())
-		return
-	}
-	defer session.Close()
-
-	_, err = session.CombinedOutput("sudo rm -rf " + model.Path.String())
+	_, err := directory.provider.sshClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete directory", err.Error())
 		return
