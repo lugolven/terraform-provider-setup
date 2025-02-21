@@ -1,7 +1,11 @@
 terraform {
   required_providers {
     setup = {
-      source = "setup"
+      source = "lugolven/setup"
+    }
+    http = {
+      source = "hashicorp/http"
+      version = "3.4.5"
     }
   }
 }
@@ -43,4 +47,16 @@ resource "setup_file" "test" {
 
 resource "setup_apt" "cleanup" {
   removed = ["vlc", "firefox"]
+}
+
+
+data "http" "docker_gpg" {
+  url = "https://download.docker.com/linux/ubuntu/gpg"
+}
+
+
+resource "setup_apt_repository" "docker" {
+  url = "https://download.docker.com/linux/ubuntu"
+  key = data.http.docker_gpg.response_body
+  name = "docker"
 }
