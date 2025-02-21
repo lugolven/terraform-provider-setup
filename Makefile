@@ -5,6 +5,7 @@ export GOBIN=${ROOT_DIR}/bin
 NPROCS = $(shell grep -c 'processor' /proc/cpuinfo)
 MAKEFLAGS += -j$(NPROCS)
 
+# todo: this does not seems to rebuild when a file changes and should be fixed
 ${GOBIN}/terraform-provider-setup: **.go go.*
 	go install
 

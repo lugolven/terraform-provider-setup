@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// todo:add integration tests
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &AptPackageResource{}
 var _ resource.ResourceWithImportState = &AptPackageResource{}
@@ -122,15 +123,15 @@ func (aptPackage *AptPackageResource) Create(ctx context.Context, req resource.C
 }
 
 func (aptPackage *AptPackageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	// todo
+	// todo: implement me
 }
 
 func (aptPackage *AptPackageResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// todo: implement update when a user is added to a group
+	// todo: implement me
 }
 
 func (aptPackage *AptPackageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	return
+	// todo: implement me
 }
 
 func (aptPackage *AptPackageResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

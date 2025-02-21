@@ -30,7 +30,6 @@ func createSshClient(user string, publicKeyFilePath string, host string, port in
 	return conn, nil
 }
 
-// func that load a public key from a file
 func PublicKeyFile(file string) (ssh.AuthMethod, error) {
 	buffer, err := os.ReadFile(file)
 	if err != nil {
@@ -43,3 +42,6 @@ func PublicKeyFile(file string) (ssh.AuthMethod, error) {
 	}
 	return ssh.PublicKeys(key), nil
 }
+
+// todo: add a wrapper to run commands on the remote machine and handle sessions
+// todo: add abstraction remote command to potentially be able to run it with other protocols than ssh, like calling it from the host machine
