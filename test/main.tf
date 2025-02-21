@@ -45,10 +45,6 @@ resource "setup_file" "test" {
   depends_on = [ setup_directory.test ]
 }
 
-resource "setup_apt" "cleanup" {
-  removed = ["vlc", "firefox"]
-}
-
 
 data "http" "docker_gpg" {
   url = "https://download.docker.com/linux/ubuntu/gpg"
@@ -59,4 +55,10 @@ resource "setup_apt_repository" "docker" {
   url = "https://download.docker.com/linux/ubuntu"
   key = data.http.docker_gpg.response_body
   name = "docker"
+}
+
+resource "setup_apt_package" "packages" {
+  installed = ["docker-ce"]
+  removed = ["vlc", "firefox"]
+  depends_on = [ setup_apt_repository.docker ]
 }
