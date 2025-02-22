@@ -37,7 +37,5 @@ test/image/authorized_keys: .ssh/id_rsa.pub
 	ssh-keygen -t rsa -b 4096 -f .ssh/id_rsa -N ""
 
 
-
-
 clean:
 	rm -rf bin

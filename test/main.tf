@@ -57,8 +57,20 @@ resource "setup_apt_repository" "docker" {
   name = "docker"
 }
 
-resource "setup_apt_package" "packages" {
-  installed = ["docker-ce"]
-  removed = ["vlc", "firefox"]
+resource "setup_apt_packages" "packages" {
+  package {
+    name = "docker-ce"
+  }
+
+  package {
+    name = "vlc"
+    absent = true
+  }
+
+  package {
+    name = "firefox"
+    absent = true
+  }
+
   depends_on = [ setup_apt_repository.docker ]
 }
