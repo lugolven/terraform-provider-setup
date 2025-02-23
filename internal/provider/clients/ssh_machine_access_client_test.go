@@ -19,7 +19,6 @@ import (
 	retry "github.com/avast/retry-go"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -194,7 +193,7 @@ func StartDockerSshServer(t *testing.T, authorized_keys_path string, port int) (
 		t.Logf("Removed container %s", containerResponse.ID)
 
 		t.Logf("Removing image %s", imageName)
-		if _, err := cli.ImageRemove(ctx, imageName, image.RemoveOptions{}); err != nil {
+		if _, err := cli.ImageRemove(ctx, imageName, types.ImageRemoveOptions{}); err != nil {
 			t.Fatalf("failed to remove image: %v", err)
 		}
 		t.Logf("Removed image %s", imageName)
