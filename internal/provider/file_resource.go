@@ -81,7 +81,7 @@ func (file *FileResource) Create(ctx context.Context, req resource.CreateRequest
 	if diags.HasError() {
 		return
 	}
-	err := file.provider.createFileWithContent(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), plan.Content.String())
+	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), plan.Content.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create file", err.Error())
 		return
@@ -115,7 +115,7 @@ func (file *FileResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	_, err := file.provider.sshClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
+	_, err := file.provider.machineAccessClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete file", err.Error())
 		return

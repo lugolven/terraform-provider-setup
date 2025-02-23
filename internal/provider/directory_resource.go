@@ -78,7 +78,7 @@ func (directory *DirectoryResource) Create(ctx context.Context, req resource.Cre
 	}
 
 	// todo: consider adding a configation for elevated actions
-	out, err := directory.provider.sshClient.RunCommand(ctx, "sudo install -d -m "+plan.Mode.String()+" -o "+plan.Owner.String()+" -g "+plan.Group.String()+" "+plan.Path.String())
+	out, err := directory.provider.machineAccessClient.RunCommand(ctx, "sudo install -d -m "+plan.Mode.String()+" -o "+plan.Owner.String()+" -g "+plan.Group.String()+" "+plan.Path.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create directory. Err="+err.Error()+"\nout = "+string(out), err.Error())
 		return
@@ -112,7 +112,7 @@ func (directory *DirectoryResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	_, err := directory.provider.sshClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
+	_, err := directory.provider.machineAccessClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete directory", err.Error())
 		return

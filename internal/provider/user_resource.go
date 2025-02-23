@@ -75,17 +75,9 @@ func (user *UserResource) Create(ctx context.Context, req resource.CreateRequest
 	if diags.HasError() {
 		return
 	}
-	session, err := user.provider.sshClient.NewSession()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create ssh session", err.Error())
-		return
-	}
-	defer session.Close()
 
 	// todo: consider adding a configation for elevated actions
-	bashCmd := "sudo useradd -ms /bin/bash " + plan.Name.String()
-	tflog.Warn(ctx, "Creating user with command: "+bashCmd)
-	out, err := session.CombinedOutput(bashCmd)
+	out, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo useradd -ms /bin/bash "+plan.Name.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create user. Err="+err.Error()+"\nout = "+string(out), err.Error())
 		return
@@ -152,14 +144,7 @@ func (user *UserResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	session, err := user.provider.sshClient.NewSession()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create ssh session", err.Error())
-		return
-	}
-	defer session.Close()
-
-	_, err = session.CombinedOutput("sudo userdel " + model.Name.String())
+	_, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo userdel "+model.Name.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete user", err.Error())
 		return
@@ -171,12 +156,8 @@ func (user *UserResource) ImportState(ctx context.Context, req resource.ImportSt
 }
 
 func (user *UserResource) getUid(ctx context.Context, name string) (int64, error) {
-	session, err := user.provider.sshClient.NewSession()
-	if err != nil {
-		return 0, err
-	}
 
-	out, err := session.CombinedOutput("cat /etc/passwd")
+	out, err := user.provider.machineAccessClient.RunCommand(ctx, "cat /etc/passwd")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
@@ -202,13 +183,7 @@ func (user *UserResource) getUid(ctx context.Context, name string) (int64, error
 }
 
 func (user *UserResource) addUserToGroup(ctx context.Context, name string, group string) error {
-	session, err := user.provider.sshClient.NewSession()
-	if err != nil {
-		return err
-	}
-	command := "sudo usermod -aG " + group + " " + name
-	tflog.Warn(ctx, "Adding user to group with command: "+command)
-	_, err = session.CombinedOutput(command)
+	_, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo usermod -aG "+group+" "+name)
 	if err != nil {
 		return fmt.Errorf("failed to add user to group: %w", err)
 	}

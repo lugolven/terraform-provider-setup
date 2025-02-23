@@ -71,7 +71,7 @@ func (group *GroupResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	out, err := group.provider.sshClient.RunCommand(ctx, "sudo groupadd -f "+plan.Name.String())
+	out, err := group.provider.machineAccessClient.RunCommand(ctx, "sudo groupadd -f "+plan.Name.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create group. Err="+err.Error()+"\nout = "+string(out), err.Error())
 		return
@@ -130,7 +130,7 @@ func (group *GroupResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	_, err := group.provider.sshClient.RunCommand(ctx, "sudo groupdel "+model.Name.String())
+	_, err := group.provider.machineAccessClient.RunCommand(ctx, "sudo groupdel "+model.Name.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete group", err.Error())
 		return
@@ -143,7 +143,7 @@ func (group *GroupResource) ImportState(ctx context.Context, req resource.Import
 
 func (group *GroupResource) getGid(ctx context.Context, name string) (int64, error) {
 
-	out, err := group.provider.sshClient.RunCommand(ctx, "getent group")
+	out, err := group.provider.machineAccessClient.RunCommand(ctx, "getent group")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
