@@ -31,12 +31,12 @@ func TestSshRunCommand(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		//defer os.Remove(keyPath.Name())
+		defer os.Remove(keyPath.Name())
 
 		if err := CreateSshKey(t, keyPath.Name()); err != nil {
 			t.Fatal(err)
 		}
-		// defer os.Remove(keyPath.Name() + ".pub")
+		defer os.Remove(keyPath.Name() + ".pub")
 
 		close, err := StartDockerSshServer(t, keyPath.Name()+".pub", 2222)
 		if err != nil {
