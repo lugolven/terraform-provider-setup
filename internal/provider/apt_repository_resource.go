@@ -77,21 +77,21 @@ func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req reso
 	// https://www.geeksforgeeks.org/install-and-use-docker-on-ubuntu-2204/
 
 	// 1. Make sure that /etc/apt/keyrings/ exists
-	_, err := aptRepository.provider.sshClient.RunCommand(ctx, "sudo install -d -m 0755 /etc/apt/keyrings/")
+	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo install -d -m 0755 /etc/apt/keyrings/")
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create /etc/apt/keyrings/ folder", err.Error())
 		return
 	}
 
 	// 2. add the key to the keyring, i.e. copy the content of the key to /etc/apt/keyrings/<name>.asc
-	err = aptRepository.provider.createFileWithContent(ctx, "/etc/apt/keyrings/"+plan.Name.ValueString()+".asc", "0644", "root", "root", plan.Key.ValueString())
+	err = aptRepository.provider.machineAccessClient.WriteFile(ctx, "/etc/apt/keyrings/"+plan.Name.ValueString()+".asc", "0644", "root", "root", plan.Key.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create key file", err.Error())
 		return
 	}
 
 	// 3. Get the architecture of the system by running `dpkg --print-architecture`
-	archResponse, err := aptRepository.provider.sshClient.RunCommand(ctx, "dpkg --print-architecture")
+	archResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "dpkg --print-architecture")
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get system architecture", err.Error())
 		return
@@ -99,7 +99,7 @@ func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req reso
 	arch := strings.Replace(string(archResponse), "\n", "", -1)
 
 	// 4. Get the flavor of the system by running `lsb_release -cs` or `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`
-	flavorResponse, err := aptRepository.provider.sshClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
+	flavorResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get system flavor", err.Error())
 		return
@@ -111,7 +111,7 @@ func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req reso
 	//   "deb [arch=$arch signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
 	//   $(flavor) stable" | \
 	//   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-	_, err = aptRepository.provider.sshClient.RunCommand(ctx, `echo "deb [arch=`+arch+` signed-by=/etc/apt/keyrings/`+plan.Name.ValueString()+`.asc] `+plan.URL.ValueString()+` `+flavor+` stable" | sudo tee /etc/apt/sources.list.d/`+plan.Name.ValueString()+`.list > /dev/null`)
+	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, `echo "deb [arch=`+arch+` signed-by=/etc/apt/keyrings/`+plan.Name.ValueString()+`.asc] `+plan.URL.ValueString()+` `+flavor+` stable" | sudo tee /etc/apt/sources.list.d/`+plan.Name.ValueString()+`.list > /dev/null`)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to add repository to sources.list.d", err.Error())
 		return

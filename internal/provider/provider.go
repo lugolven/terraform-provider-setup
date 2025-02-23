@@ -2,17 +2,14 @@ package provider
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"strconv"
+	"terraform-provider-setup/internal/provider/clients"
 
-	scp "github.com/bramvdbogaerde/go-scp"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // todo:add integration tests
@@ -30,7 +27,7 @@ func NewProvider() func() provider.Provider {
 
 // internalProvider is the provider implementation.
 type internalProvider struct {
-	sshClient *WrapperSshClient
+	machineAccessClient clients.MachineAccessClient
 }
 
 // todo: add more validation of the attributes
@@ -84,7 +81,7 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	p.sshClient, err = createSshClient(data.User.ValueString(), data.Private_key.ValueString(), data.Host.ValueString(), port)
+	p.machineAccessClient, err = clients.CreateSshMachineAccessClient(data.User.ValueString(), data.Private_key.ValueString(), data.Host.ValueString(), port)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create SSH client", err.Error())
 		return
@@ -130,55 +127,4 @@ func (p *internalProvider) newAptPackagesResource() resource.Resource {
 }
 func (p *internalProvider) newAptRepositoryResource() resource.Resource {
 	return NewAptRepositoryResource(p)
-}
-
-func (p *internalProvider) createFileWithContent(ctx context.Context, path string, mode string, owner string, group string, content string) error {
-	scpClient, err := scp.NewClientBySSH(p.sshClient.Client)
-	if err != nil {
-		return fmt.Errorf("error creating new SSH session from existing connection.\n %w", err)
-	}
-
-	// write file content to tmp file from the host
-	tflog.Debug(ctx, "Writing file content to temp file")
-	tmpFile, err := os.CreateTemp("", "tempfile")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	tflog.Debug(ctx, "Writing content to temp file "+tmpFile.Name())
-	err = os.WriteFile(tmpFile.Name(), []byte(content), 0755)
-	if err != nil {
-		return fmt.Errorf("failed to write to temp file: %w", err)
-	}
-
-	tflog.Debug(ctx, "Copying file to remote host "+path)
-
-	// copy the file to the remote host
-	f, _ := os.Open(tmpFile.Name())
-	remoteTmpFile, _ := os.CreateTemp("", "tempfile")
-	err = scpClient.CopyFromFile(ctx, *f, remoteTmpFile.Name(), "0700")
-	if err != nil {
-		return fmt.Errorf("failed to copy file to remote host: %w", err)
-	}
-
-	// move the file to the correct location
-	_, err = p.sshClient.RunCommand(ctx, "sudo mv "+remoteTmpFile.Name()+" "+path)
-	if err != nil {
-		return err
-	}
-
-	// set the owner and group of the remote file
-	out, err := p.sshClient.RunCommand(ctx, "sudo chown "+owner+":"+owner+" "+path)
-	if err != nil {
-		return fmt.Errorf("failed to set owner and group: %s", out)
-	}
-
-	// set the mode of the remote file
-	out, err = p.sshClient.RunCommand(ctx, "sudo chmod "+mode+" "+path)
-	if err != nil {
-		return fmt.Errorf("failed to set mode: %s", out)
-	}
-
-	return nil
 }

@@ -24,5 +24,13 @@ jobs:
 
     - name: Build
       run: make build
+    
+    - name: Set up Docker
+      uses: docker/setup-docker-action@v4
+      with:
+        version: 'latest'
+
+    - name: Test
+      run: make tests
     # todo: add linting
     # todo: add tests

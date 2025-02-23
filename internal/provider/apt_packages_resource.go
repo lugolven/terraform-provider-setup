@@ -188,13 +188,8 @@ func (aptPackage *AptPackagesResource) ImportState(ctx context.Context, req reso
 }
 
 func (aptPackage *AptPackagesResource) listCurrentlyInstalledPackages(ctx context.Context) ([]string, error) {
-	session, err := aptPackage.provider.sshClient.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
 
-	out, err := aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt list --installed")
+	out, err := aptPackage.provider.machineAccessClient.RunCommand(ctx, "sudo apt list --installed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list installed apt packages. Err=%w\nout = %s", err, string(out))
 	}
@@ -216,12 +211,12 @@ func (aptPackage *AptPackagesResource) ensureRemoved(ctx context.Context, toRemo
 		return nil
 	}
 
-	out, err := aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt-get remove -y "+strings.Join(toRemoved, " "))
+	out, err := aptPackage.provider.machineAccessClient.RunCommand(ctx, "sudo apt-get remove -y "+strings.Join(toRemoved, " "))
 	if err != nil {
 		return fmt.Errorf("failed to remove apt packages. Err=%w\nout = %s", err, string(out))
 	}
 
-	out, err = aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt autoremove -y")
+	out, err = aptPackage.provider.machineAccessClient.RunCommand(ctx, "sudo apt autoremove -y")
 	if err != nil {
 		return fmt.Errorf("failed to auto-remove apt packages. Err=%s\nout = %s", err, string(out))
 	}
@@ -235,7 +230,7 @@ func (aptPackage *AptPackagesResource) ensureInstalled(ctx context.Context, toIn
 		return nil
 	}
 
-	out, err := aptPackage.provider.sshClient.RunCommand(ctx, "sudo apt update && sudo apt-get install -y "+strings.Join(toInstall, " "))
+	out, err := aptPackage.provider.machineAccessClient.RunCommand(ctx, "sudo apt update && sudo apt-get install -y "+strings.Join(toInstall, " "))
 	if err != nil {
 		return fmt.Errorf("failed to install apt packages. Err=%w\nout = %s", err, string(out))
 	}

@@ -18,12 +18,11 @@ RUN mkdir /run/sshd
 
 RUN apt install sudo -y
 RUN echo "test ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-COPY ./authorized_keys /home/test/.ssh/authorized_keys
-
+COPY ./main.sh /app/main.sh
 EXPOSE 22
 
 RUN apt-get update && \
     apt-get install -y vlc
 
 # Start SSH service
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+ENTRYPOINT  ["/app/main.sh"]

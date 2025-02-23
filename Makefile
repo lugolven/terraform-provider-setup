@@ -12,7 +12,7 @@ ${GOBIN}/terraform-provider-setup: **.go go.*
 build: ${GOBIN}/terraform-provider-setup
 
 
-tests: build ssh-key
+tests: 
 	go test -v ./...
 
 test-terraform: build
