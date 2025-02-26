@@ -32,10 +32,10 @@ type internalProvider struct {
 
 // todo: add more validation of the attributes
 type providerData struct {
-	Private_key types.String `tfsdk:"private_key"`
-	User        types.String `tfsdk:"user"`
-	Host        types.String `tfsdk:"host"`
-	Port        types.String `tfsdk:"port"`
+	PrivateKey types.String `tfsdk:"private_key"`
+	User       types.String `tfsdk:"user"`
+	Host       types.String `tfsdk:"host"`
+	Port       types.String `tfsdk:"port"`
 }
 
 // Metadata returns the provider type name.
@@ -44,7 +44,7 @@ func (p *internalProvider) Metadata(_ context.Context, _ provider.MetadataReques
 }
 
 // Schema defines the provider-level schema for configuration data.
-func (p *internalProvider) Schema(ctx context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *internalProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Sets up bare-metal machines.",
 		Attributes: map[string]schema.Attribute{
@@ -72,16 +72,18 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 	var data providerData
 	diags := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
 	port, err := strconv.Atoi(data.Port.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to convert port to int", err.Error())
 		return
 	}
 
-	p.machineAccessClient, err = clients.CreateSshMachineAccessClient(data.User.ValueString(), data.Private_key.ValueString(), data.Host.ValueString(), port)
+	p.machineAccessClient, err = clients.CreateSSHMachineAccessClient(data.User.ValueString(), data.PrivateKey.ValueString(), data.Host.ValueString(), port)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create SSH client", err.Error())
 		return
@@ -107,24 +109,24 @@ func (p *internalProvider) Resources(_ context.Context) []func() resource.Resour
 
 // todo: stop passing the provider around, and provide the ssh client as a field
 func (p *internalProvider) newUserResource() resource.Resource {
-	return NewUserResource(p)
+	return newUserResource(p)
 }
 
 func (p *internalProvider) newGroupResource() resource.Resource {
-	return NewGroupResource(p)
+	return newGroupResource(p)
 }
 
 func (p *internalProvider) newDirectoryResource() resource.Resource {
-	return NewDirectoryResource(p)
+	return newDirectoryResource(p)
 }
 
 func (p *internalProvider) newFileResource() resource.Resource {
-	return NewFileResource(p)
+	return newFileResource(p)
 }
 
 func (p *internalProvider) newAptPackagesResource() resource.Resource {
-	return NewAptPackagesResource(p)
+	return newAptPackagesResource(p)
 }
 func (p *internalProvider) newAptRepositoryResource() resource.Resource {
-	return NewAptRepositoryResource(p)
+	return newAptRepositoryResource(p)
 }
