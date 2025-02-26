@@ -24,7 +24,9 @@ import (
 )
 
 func TestSshRunCommand(t *testing.T) {
-	t.Run("successful command execution", func(t *testing.T) {
+	expectedHelloOutput := "hello\n"
+
+	t.Run("successful command execution with pricate key", func(t *testing.T) {
 		// Arrange
 		keyPath, err := os.CreateTemp("", "key")
 		if err != nil {
@@ -43,12 +45,11 @@ func TestSshRunCommand(t *testing.T) {
 		}
 		defer stopServer()
 
-		// sleep for 10s to give the server time to start
 		var client MachineAccessClient
 
 		err = retry.Do(func() error {
 			var dialErr error
-			client, dialErr = CreateSSHMachineAccessClient("test", keyPath.Name(), "localhost", 2222)
+			client, dialErr = CreateSSHMachineAccessClientBuilder("test", "localhost", 2222).WithPrivateKeyPath(keyPath.Name()).Build()
 
 			log.Println("Trying to dial...")
 
@@ -66,10 +67,108 @@ func TestSshRunCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if output != "hello\n" {
+		if output != expectedHelloOutput {
 			t.Fatalf("unexpected output: %s", output)
 		}
 	})
+
+	t.Run("successful command execution with ssh agent", func(t *testing.T) {
+		// Arrange
+		keyPath, err := os.CreateTemp("", "key")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(keyPath.Name())
+
+		if err := CreateSSHKey(t, keyPath.Name()); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(keyPath.Name() + ".pub")
+
+		socket, stopAgent := startSSHAgent(t, keyPath.Name())
+		defer stopAgent()
+
+		stopServer, err := StartDockerSSHServer(t, keyPath.Name()+".pub", 2222)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer stopServer()
+
+		var client MachineAccessClient
+
+		err = retry.Do(func() error {
+			var dialErr error
+			client, dialErr = CreateSSHMachineAccessClientBuilder("test", "localhost", 2222).WithAgent(socket).Build()
+
+			log.Println("Trying to dial...")
+
+			return dialErr
+		}, retry.Attempts(20), retry.Delay(10*time.Second))
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Act
+		output, err := client.RunCommand(ctx, "echo hello")
+
+		// Assert
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if output != expectedHelloOutput {
+			t.Fatalf("unexpected output: %s", output)
+		}
+	})
+}
+
+func startSSHAgent(t *testing.T, keyPath string) (string, func()) {
+	socket, err := os.MkdirTemp("/tmp", "socket")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+
+	// remove the socket file
+	err = os.RemoveAll(socket)
+	if err != nil {
+		t.Fatalf("failed to remove socket file: %v", err)
+	}
+
+	cmd := exec.Command("ssh-agent", "-a", socket) // #nosec G204 - this is only used for testing
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to start ssh agent: %v\n%v", err, string(output))
+	}
+
+	t.Logf("output: %s", string(output))
+
+	PIDLine := strings.Split(string(output), "\n")[1]
+	PID := strings.Split(strings.Split(PIDLine, ";")[0], "=")[1]
+
+	t.Logf("Started ssh agent with PID %s", PID)
+
+	t.Logf("Adding key to ssh agent")
+
+	cmd = exec.Command("ssh-add", keyPath)
+
+	cmd.Env = append(os.Environ(), "SSH_AUTH_SOCK="+socket, "SSH_AGENT_PID="+PID)
+
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to add key to ssh agent: %v\n%v", err, string(output))
+	}
+
+	return socket, func() {
+		cmd := exec.Command("ssh-agent", "-k")
+
+		cmd.Env = append(os.Environ(), "SSH_AGENT_PID="+PID)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("failed to stop ssh agent: %v\n%v", err, string(output))
+		}
+	}
 }
 
 func CreateSSHKey(t *testing.T, keyPath string) error {
