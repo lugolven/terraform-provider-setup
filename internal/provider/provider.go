@@ -36,7 +36,7 @@ type providerData struct {
 	Host       types.String `tfsdk:"host"`
 	Port       types.String `tfsdk:"port"`
 	PrivateKey types.String `tfsdk:"private_key"`
-	SshAgent   types.String `tfsdk:"ssh_agent"`
+	SSHAgent   types.String `tfsdk:"ssh_agent"`
 }
 
 // Metadata returns the provider type name.
@@ -93,8 +93,8 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 		sshClientBuild.WithPrivateKeyPath(data.PrivateKey.ValueString())
 	}
 
-	if data.SshAgent.IsNull() {
-		sshClientBuild.WithAgent(data.SshAgent.ValueString())
+	if data.SSHAgent.IsNull() {
+		sshClientBuild.WithAgent(data.SSHAgent.ValueString())
 	}
 
 	p.machineAccessClient, err = sshClientBuild.Build()

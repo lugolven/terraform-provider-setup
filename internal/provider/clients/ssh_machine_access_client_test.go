@@ -24,6 +24,8 @@ import (
 )
 
 func TestSshRunCommand(t *testing.T) {
+	expectedHelloOutput := "hello\n"
+
 	t.Run("successful command execution with pricate key", func(t *testing.T) {
 		// Arrange
 		keyPath, err := os.CreateTemp("", "key")
@@ -65,7 +67,7 @@ func TestSshRunCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if output != "hello\n" {
+		if output != expectedHelloOutput {
 			t.Fatalf("unexpected output: %s", output)
 		}
 	})
@@ -114,7 +116,7 @@ func TestSshRunCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if output != "hello\n" {
+		if output != expectedHelloOutput {
 			t.Fatalf("unexpected output: %s", output)
 		}
 	})
@@ -147,7 +149,9 @@ func startSSHAgent(t *testing.T, keyPath string) (string, func()) {
 	t.Logf("Started ssh agent with PID %s", PID)
 
 	t.Logf("Adding key to ssh agent")
+
 	cmd = exec.Command("ssh-add", keyPath)
+
 	cmd.Env = append(os.Environ(), "SSH_AUTH_SOCK="+socket, "SSH_AGENT_PID="+PID)
 
 	output, err = cmd.CombinedOutput()
@@ -165,7 +169,6 @@ func startSSHAgent(t *testing.T, keyPath string) (string, func()) {
 			t.Fatalf("failed to stop ssh agent: %v\n%v", err, string(output))
 		}
 	}
-
 }
 
 func CreateSSHKey(t *testing.T, keyPath string) error {
