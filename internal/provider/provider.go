@@ -32,10 +32,11 @@ type internalProvider struct {
 
 // todo: add more validation of the attributes
 type providerData struct {
-	PrivateKey types.String `tfsdk:"private_key"`
 	User       types.String `tfsdk:"user"`
 	Host       types.String `tfsdk:"host"`
 	Port       types.String `tfsdk:"port"`
+	PrivateKey types.String `tfsdk:"private_key"`
+	SshAgent   types.String `tfsdk:"ssh_agent"`
 }
 
 // Metadata returns the provider type name.
@@ -50,7 +51,11 @@ func (p *internalProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"private_key": schema.StringAttribute{
 				Description: "Private key to use for SSH authentication",
-				Required:    true,
+				Optional:    true,
+			},
+			"ssh_agent": schema.StringAttribute{
+				Description: "Path to the SSH agent socket",
+				Optional:    true,
 			},
 			"user": schema.StringAttribute{
 				Description: "User to use for SSH authentication",
@@ -83,7 +88,16 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	p.machineAccessClient, err = clients.CreateSSHMachineAccessClient(data.User.ValueString(), data.PrivateKey.ValueString(), data.Host.ValueString(), port)
+	sshClientBuild := clients.CreateSSHMachineAccessClientBuilder(data.User.ValueString(), data.Host.ValueString(), port)
+	if data.PrivateKey.IsNull() {
+		sshClientBuild.WithPrivateKeyPath(data.PrivateKey.ValueString())
+	}
+
+	if data.SshAgent.IsNull() {
+		sshClientBuild.WithAgent(data.SshAgent.ValueString())
+	}
+
+	p.machineAccessClient, err = sshClientBuild.Build()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create SSH client", err.Error())
 		return
