@@ -20,6 +20,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/hashicorp/terraform-plugin-go v0.26.0 // indirect
+	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -41,7 +42,7 @@ require (
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/bramvdbogaerde/go-scp v1.5.0
-	github.com/docker/docker v25.0.8+incompatible
+	github.com/docker/docker v28.0.0+incompatible
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
