@@ -15,17 +15,17 @@ import (
 // todo:add integration tests
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &DirectoryResource{}
-var _ resource.ResourceWithImportState = &DirectoryResource{}
+var _ resource.Resource = &directoryResource{}
+var _ resource.ResourceWithImportState = &directoryResource{}
 
-func NewDirectoryResource(p *internalProvider) resource.Resource {
-	return &DirectoryResource{
+func newDirectoryResource(p *internalProvider) resource.Resource {
+	return &directoryResource{
 		provider: p,
 	}
 }
 
-// DirectoryResource defines the resource implementation.
-type DirectoryResource struct {
+// directoryResource defines the resource implementation.
+type directoryResource struct {
 	provider *internalProvider
 }
 
@@ -36,11 +36,11 @@ type directoryResourceModel struct {
 	Group types.Int64  `tfsdk:"group"`
 }
 
-func (directory *DirectoryResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (directory *directoryResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_directory"
 }
 
-func (directory *DirectoryResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (directory *directoryResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Directory resource",
 
@@ -65,14 +65,15 @@ func (directory *DirectoryResource) Schema(ctx context.Context, req resource.Sch
 	}
 }
 
-func (directory *DirectoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (directory *directoryResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 
 }
 
-func (directory *DirectoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (directory *directoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan directoryResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -86,28 +87,31 @@ func (directory *DirectoryResource) Create(ctx context.Context, req resource.Cre
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 }
 
-func (directory *DirectoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (directory *directoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model directoryResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 }
 
-func (directory *DirectoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (directory *directoryResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	// todo: implement update
 }
 
-func (directory *DirectoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (directory *directoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model directoryResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -119,6 +123,6 @@ func (directory *DirectoryResource) Delete(ctx context.Context, req resource.Del
 	}
 }
 
-func (directory *DirectoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (directory *directoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

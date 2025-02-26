@@ -5,6 +5,9 @@ export GOBIN=${ROOT_DIR}/bin
 NPROCS = $(shell grep -c 'processor' /proc/cpuinfo)
 MAKEFLAGS += -j$(NPROCS)
 
+
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 # todo: this does not seems to rebuild when a file changes and should be fixed
 ${GOBIN}/terraform-provider-setup: **.go go.*
 	go install
@@ -39,3 +42,13 @@ test/image/authorized_keys: .ssh/id_rsa.pub
 
 clean:
 	rm -rf bin
+
+${GOBIN}/tools:
+	mkdir -p ${GOBIN}/tools
+
+${GOBIN}/tools/golangci-lint: ${GOBIN}/tools
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b ${GOBIN}/tools/golangci-lint v1.64.5
+	chmod +x ${GOBIN}/tools/golangci-lint
+
+lint:${GOBIN}/tools/golangci-lint
+	${GOBIN}/tools/golangci-lint//golangci-lint run --config ${ROOT_DIR}/.golangci.yml
