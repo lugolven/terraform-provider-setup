@@ -1,0 +1,9 @@
+{
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--fast",
+        "--config=/workspaces/terraform-provider-setup/.golangci.yml"
+    ],
+    "go.lintOnSave": "package",
+    "go.formatTool": "gofumpt"
+}
