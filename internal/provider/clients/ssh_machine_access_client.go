@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"os"
 
@@ -11,30 +12,39 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func CreateSshMachineAccessClient(user string, publicKeyFilePath string, host string, port int) (MachineAccessClient, error) {
+// CreateSSHMachineAccessClient creates a new ssh machine access client.
+func CreateSSHMachineAccessClient(user string, publicKeyFilePath string, host string, port int) (MachineAccessClient, error) {
 	publicKeyFile, err := publicKeyFile(publicKeyFilePath)
 	if err != nil {
 		pwd := os.Getenv("PWD")
 		return nil, fmt.Errorf("failed to load public key file %s (pwd:%s): %w", publicKeyFilePath, pwd, err)
 	}
-	ssh_config := &ssh.ClientConfig{
+
+	sshConfig := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
 			publicKeyFile,
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 - todo: make this configurable
 	}
 
 	addr := fmt.Sprintf("%v:%v", host, port)
-	conn, err := ssh.Dial("tcp", addr, ssh_config)
+
+	conn, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
+
 	return &sshMachineAccessClient{conn}, nil
 }
 
 func publicKeyFile(file string) (ssh.AuthMethod, error) {
-	buffer, err := os.ReadFile(file)
+	// validate that the path is absolute
+	if !filepath.IsAbs(file) {
+		return nil, fmt.Errorf("public key file path must be absolute")
+	}
+
+	buffer, err := os.ReadFile(file) // #nosec 304 - todo: Find a way to make this secure
 	if err != nil {
 		return nil, fmt.Errorf("failed to read publicKeyFile: %w", err)
 	}
@@ -43,6 +53,7 @@ func publicKeyFile(file string) (ssh.AuthMethod, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse privateKey: %w", err)
 	}
+
 	return ssh.PublicKeys(key), nil
 }
 
@@ -58,12 +69,14 @@ func (client *sshMachineAccessClient) RunCommand(ctx context.Context, command st
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
+
 	tflog.Debug(ctx, "Running command: "+command)
 	out, err := session.CombinedOutput(command)
 
 	if err != nil {
 		return string(out), fmt.Errorf("failed to run command: %w", err)
 	}
+
 	return string(out), nil
 }
 
@@ -75,6 +88,7 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 
 	// write file content to tmp file from the host
 	tflog.Debug(ctx, "Writing file content to temp file")
+
 	tmpFile, err := os.CreateTemp("", "tempfile")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
@@ -82,7 +96,8 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 	defer os.Remove(tmpFile.Name())
 
 	tflog.Debug(ctx, "Writing content to temp file "+tmpFile.Name())
-	err = os.WriteFile(tmpFile.Name(), []byte(content), 0755)
+
+	err = os.WriteFile(tmpFile.Name(), []byte(content), 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write to temp file: %w", err)
 	}
@@ -92,6 +107,7 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 	// copy the file to the remote host
 	f, _ := os.Open(tmpFile.Name())
 	remoteTmpFile, _ := os.CreateTemp("", "tempfile")
+
 	err = scpClient.CopyFromFile(ctx, *f, remoteTmpFile.Name(), "0700")
 	if err != nil {
 		return fmt.Errorf("failed to copy file to remote host: %w", err)
@@ -104,7 +120,7 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 	}
 
 	// set the owner and group of the remote file
-	out, err := client.RunCommand(ctx, "sudo chown "+owner+":"+owner+" "+path)
+	out, err := client.RunCommand(ctx, "sudo chown "+owner+":"+group+" "+path)
 	if err != nil {
 		return fmt.Errorf("failed to set owner and group: %s", out)
 	}

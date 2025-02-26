@@ -47,7 +47,6 @@ func TestWriteFile(t *testing.T) {
 	testContent := "test content"
 
 	t.Run("successful file write", func(t *testing.T) {
-
 		// Act
 		err := client.WriteFile(ctx, testFilePath, "0644", user.Uid, user.Gid, testContent)
 		if err != nil {
@@ -68,5 +67,4 @@ func TestWriteFile(t *testing.T) {
 
 		os.Remove(testFilePath)
 	})
-
 }

@@ -32,23 +32,26 @@ func TestSshRunCommand(t *testing.T) {
 		}
 		defer os.Remove(keyPath.Name())
 
-		if err := CreateSshKey(t, keyPath.Name()); err != nil {
+		if err := CreateSSHKey(t, keyPath.Name()); err != nil {
 			t.Fatal(err)
 		}
 		defer os.Remove(keyPath.Name() + ".pub")
 
-		close, err := StartDockerSshServer(t, keyPath.Name()+".pub", 2222)
+		stopServer, err := StartDockerSSHServer(t, keyPath.Name()+".pub", 2222)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer close()
+		defer stopServer()
 
 		// sleep for 10s to give the server time to start
 		var client MachineAccessClient
+
 		err = retry.Do(func() error {
 			var dialErr error
-			client, dialErr = CreateSshMachineAccessClient("test", keyPath.Name(), "localhost", 2222)
+			client, dialErr = CreateSSHMachineAccessClient("test", keyPath.Name(), "localhost", 2222)
+
 			log.Println("Trying to dial...")
+
 			return dialErr
 		}, retry.Attempts(20), retry.Delay(10*time.Second))
 		if err != nil {
@@ -62,15 +65,16 @@ func TestSshRunCommand(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if output != "hello\n" {
 			t.Fatalf("unexpected output: %s", output)
 		}
-
 	})
 }
 
-func CreateSshKey(t *testing.T, keyPath string) error {
-	// remove keyPath if it exists
+func CreateSSHKey(t *testing.T, keyPath string) error {
+	t.Log("Creating ssh key")
+
 	if _, err := os.Stat(keyPath); !os.IsNotExist(err) {
 		if err := os.Remove(keyPath); err != nil {
 			return fmt.Errorf("failed to remove existing key file: %w", err)
@@ -90,11 +94,12 @@ func CreateSshKey(t *testing.T, keyPath string) error {
 		return fmt.Errorf("public key file not found: %w", err)
 	}
 
-	return nil
+	t.Logf("Created ssh key %s", keyPath)
 
+	return nil
 }
 
-func StartDockerSshServer(t *testing.T, authorized_keys_path string, port int) (func(), error) {
+func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, port int) (func(), error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, err
@@ -116,10 +121,13 @@ func StartDockerSshServer(t *testing.T, authorized_keys_path string, port int) (
 		Remove:         true,
 		SuppressOutput: false,
 	})
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to build image: %w", err)
 	}
+
 	defer buildResponse.Body.Close()
+
 	_, err = io.Copy(os.Stdout, buildResponse.Body)
 	if err != nil {
 		log.Fatalf("Copy error: %v", err)
@@ -133,10 +141,12 @@ func StartDockerSshServer(t *testing.T, authorized_keys_path string, port int) (
 	t.Logf("Built image %s", builtImage.ID)
 
 	t.Logf("Creating container from image %s", imageName)
-	keyContent, err := os.ReadFile(authorized_keys_path)
+
+	keyContent, err := os.ReadFile(authorizedKeysPath) // #nosec G304 - this is only used for testing
 	if err != nil {
 		return nil, fmt.Errorf("failed to read authorized_keys file: %w", err)
 	}
+
 	containerResponse, err := cli.ContainerCreate(ctx, &container.Config{
 		Image: imageName,
 		Cmd:   []string{string(keyContent)},
@@ -158,6 +168,7 @@ func StartDockerSshServer(t *testing.T, authorized_keys_path string, port int) (
 	t.Logf("Created container %s", containerResponse.ID)
 
 	t.Logf("Starting container %s", containerResponse.ID)
+
 	if err := cli.ContainerStart(ctx, containerResponse.ID, container.StartOptions{}); err != nil {
 		return nil, fmt.Errorf("failed to start container: %w", err)
 	}
@@ -179,23 +190,30 @@ func StartDockerSshServer(t *testing.T, authorized_keys_path string, port int) (
 			fmt.Printf("Copy error: %v", err)
 		}
 	}()
+
 	return func() {
 		t.Logf("Stopping container %s", containerResponse.ID)
+
 		if err := cli.ContainerStop(ctx, containerResponse.ID, container.StopOptions{}); err != nil {
 			t.Fatalf("failed to stop container: %v", err)
 		}
+
 		t.Logf("Stopped container %s", containerResponse.ID)
 
 		t.Logf("Removing container %s", containerResponse.ID)
+
 		if err := cli.ContainerRemove(ctx, containerResponse.ID, container.RemoveOptions{}); err != nil {
 			t.Fatalf("failed to remove container: %v", err)
 		}
+
 		t.Logf("Removed container %s", containerResponse.ID)
 
 		t.Logf("Removing image %s", imageName)
+
 		if _, err := cli.ImageRemove(ctx, imageName, types.ImageRemoveOptions{}); err != nil {
 			t.Fatalf("failed to remove image: %v", err)
 		}
+
 		t.Logf("Removed image %s", imageName)
 	}, nil
 }
@@ -205,14 +223,14 @@ func randomString(n int) string {
 
 	s := make([]rune, n)
 	for i := range s {
-		s[i] = letters[rand.Intn(len(letters))]
+		s[i] = letters[rand.Intn(len(letters))] // #nosec G404 - This is only used for testing
 	}
+
 	return string(s)
 }
 
 // from https://github.com/ubclaunchpad/inertia/blob/master/daemon/inertiad/build/util.go#L25
 func buildTar(dir string, outputs ...io.Writer) error {
-
 	// ensure the src actually exists before trying to tar it
 	if _, err := os.Stat(dir); err != nil {
 		return fmt.Errorf("Unable to tar files - %v", err.Error())
@@ -252,7 +270,7 @@ func buildTar(dir string, outputs ...io.Writer) error {
 		}
 
 		// open files for taring
-		f, err := os.Open(file)
+		f, err := os.Open(file) // #nosec G304 - this is always reading the input directory
 		if err != nil {
 			return err
 		}
@@ -260,6 +278,7 @@ func buildTar(dir string, outputs ...io.Writer) error {
 
 		// copy file data into tar writer
 		_, err = io.Copy(tw, f)
+
 		return err
 	})
 }

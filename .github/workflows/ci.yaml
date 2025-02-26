@@ -32,5 +32,6 @@ jobs:
 
     - name: Test
       run: make tests
-    # todo: add linting
-    # todo: add tests
+
+    - name: Lint
+      run: make lint

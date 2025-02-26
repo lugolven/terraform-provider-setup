@@ -16,17 +16,17 @@ import (
 // todo:add integration tests
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &AptRepositoryResource{}
-var _ resource.ResourceWithImportState = &AptRepositoryResource{}
+var _ resource.Resource = &aptRepositoryResource{}
+var _ resource.ResourceWithImportState = &aptRepositoryResource{}
 
-func NewAptRepositoryResource(p *internalProvider) resource.Resource {
-	return &AptRepositoryResource{
+func newAptRepositoryResource(p *internalProvider) resource.Resource {
+	return &aptRepositoryResource{
 		provider: p,
 	}
 }
 
-// AptRepositoryResource defines the resource implementation.
-type AptRepositoryResource struct {
+// aptRepositoryResource defines the resource implementation.
+type aptRepositoryResource struct {
 	provider *internalProvider
 }
 
@@ -36,11 +36,11 @@ type aptRepositoryResourceModel struct {
 	URL  types.String `tfsdk:"url"`
 }
 
-func (aptRepository *AptRepositoryResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (aptRepository *aptRepositoryResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_apt_repository"
 }
 
-func (aptRepository *AptRepositoryResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (aptRepository *aptRepositoryResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Apt key resource",
 		Attributes: map[string]schema.Attribute{
@@ -60,14 +60,15 @@ func (aptRepository *AptRepositoryResource) Schema(ctx context.Context, req reso
 	}
 }
 
-func (aptRepository *AptRepositoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (aptRepository *aptRepositoryResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	// todo: implement me
 }
 
-func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan aptRepositoryResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -96,6 +97,7 @@ func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req reso
 		resp.Diagnostics.AddError("Failed to get system architecture", err.Error())
 		return
 	}
+
 	arch := strings.Replace(string(archResponse), "\n", "", -1)
 
 	// 4. Get the flavor of the system by running `lsb_release -cs` or `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`
@@ -104,6 +106,7 @@ func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req reso
 		resp.Diagnostics.AddError("Failed to get system flavor", err.Error())
 		return
 	}
+
 	flavor := strings.Replace(string(flavorResponse), "\n", "", -1)
 
 	// 5. Add the repository to /etc/apt/sources.list.d/<name>.list with the following content:
@@ -119,23 +122,24 @@ func (aptRepository *AptRepositoryResource) Create(ctx context.Context, req reso
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 }
 
-func (aptRepository *AptRepositoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (aptRepository *aptRepositoryResource) Read(_ context.Context, _ resource.ReadRequest, _ *resource.ReadResponse) {
 	// todo: implement me
 }
 
-func (aptRepository *AptRepositoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (aptRepository *aptRepositoryResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	// todo: implement me
 }
 
-func (aptRepository *AptRepositoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (aptRepository *aptRepositoryResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
 	// todo: implement me
 }
 
-func (aptRepository *AptRepositoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (aptRepository *aptRepositoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

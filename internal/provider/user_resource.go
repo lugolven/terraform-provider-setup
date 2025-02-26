@@ -18,31 +18,31 @@ import (
 
 // todo:add integration tests
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &UserResource{}
-var _ resource.ResourceWithImportState = &UserResource{}
+var _ resource.Resource = &userResource{}
+var _ resource.ResourceWithImportState = &userResource{}
 
-func NewUserResource(p *internalProvider) resource.Resource {
-	return &UserResource{
+func newUserResource(p *internalProvider) resource.Resource {
+	return &userResource{
 		provider: p,
 	}
 }
 
-// UserResource defines the resource implementation.
-type UserResource struct {
+// userResource defines the resource implementation.
+type userResource struct {
 	provider *internalProvider
 }
 
 type userResourceModel struct {
 	Name   types.String `tfsdk:"name"`
-	Uid    types.Int64  `tfsdk:"uid"`
+	UID    types.Int64  `tfsdk:"uid"`
 	Groups types.List   `tfsdk:"groups"`
 }
 
-func (user *UserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (user *userResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_user"
 }
 
-func (user *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (user *userResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "User resource",
 
@@ -64,14 +64,15 @@ func (user *UserResource) Schema(ctx context.Context, req resource.SchemaRequest
 	}
 }
 
-func (user *UserResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (user *userResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	// todo: implement me
 }
 
-func (user *UserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (user *userResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan userResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -83,14 +84,16 @@ func (user *UserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	uid, err := user.getUid(ctx, plan.Name.String())
+	uid, err := user.getUID(ctx, plan.Name.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get uid", err.Error())
 		return
 	}
-	plan.Uid = types.Int64Value(uid)
+
+	plan.UID = types.Int64Value(uid)
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -106,40 +109,42 @@ func (user *UserResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 }
 
-func (user *UserResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (user *userResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model userResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 
-	uid, err := user.getUid(ctx, model.Name.String())
+	uid, err := user.getUID(ctx, model.Name.String())
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get uid  "+err.Error(), err.Error())
 		return
 	}
 
-	if uid != model.Uid.ValueInt64() {
-		model.Uid = types.Int64Value(uid)
+	if uid != model.UID.ValueInt64() {
+		model.UID = types.Int64Value(uid)
 		diags = resp.State.Set(ctx, model)
 		resp.Diagnostics.Append(diags...)
+
 		if diags.HasError() {
 			return
 		}
 	}
-
 }
 
-func (user *UserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (user *userResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	// todo: implement me
 }
 
-func (user *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (user *userResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model userResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -151,41 +156,45 @@ func (user *UserResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
-func (user *UserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (user *userResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (user *UserResource) getUid(ctx context.Context, name string) (int64, error) {
-
+func (user *userResource) getUID(ctx context.Context, name string) (int64, error) {
 	out, err := user.provider.machineAccessClient.RunCommand(ctx, "cat /etc/passwd")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
+
 	name = strings.Replace(name, "\"", "", -1)
 	tflog.Debug(ctx, "name: "+name)
-	for _, line := range strings.Split(string(out), "\n") {
-		line_parts := strings.Split(line, ":")
-		tflog.Debug(ctx, "Line: "+strings.Join(line_parts, "\t"))
 
-		if line_parts[0] == name {
-			stringId := line_parts[2]
-			id, err := strconv.ParseInt(stringId, 10, 64)
+	for _, line := range strings.Split(string(out), "\n") {
+		lineParts := strings.Split(line, ":")
+		tflog.Debug(ctx, "Line: "+strings.Join(lineParts, "\t"))
+
+		if lineParts[0] == name {
+			stringID := lineParts[2]
+			id, err := strconv.ParseInt(stringID, 10, 64)
+
 			if err != nil {
-				return 0, fmt.Errorf("failed to parse uid ('%s'): %w", stringId, err)
+				return 0, fmt.Errorf("failed to parse uid ('%s'): %w", stringID, err)
 			}
+
 			return id, nil
-		} else {
-			tflog.Debug(ctx, "Line does not start with name")
 		}
+
+		tflog.Debug(ctx, "Line does not start with name")
 	}
 
 	return 0, fmt.Errorf("user not found")
 }
 
-func (user *UserResource) addUserToGroup(ctx context.Context, name string, group string) error {
+func (user *userResource) addUserToGroup(ctx context.Context, name string, group string) error {
 	_, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo usermod -aG "+group+" "+name)
 	if err != nil {
 		return fmt.Errorf("failed to add user to group: %w", err)
 	}
+
 	return nil
 }

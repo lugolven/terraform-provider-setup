@@ -15,17 +15,17 @@ import (
 // todo:add integration tests
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &FileResource{}
-var _ resource.ResourceWithImportState = &FileResource{}
+var _ resource.Resource = &fileResource{}
+var _ resource.ResourceWithImportState = &fileResource{}
 
-func NewFileResource(p *internalProvider) resource.Resource {
-	return &FileResource{
+func newFileResource(p *internalProvider) resource.Resource {
+	return &fileResource{
 		provider: p,
 	}
 }
 
-// FileResource defines the resource implementation.
-type FileResource struct {
+// fileResource defines the resource implementation.
+type fileResource struct {
 	provider *internalProvider
 }
 
@@ -37,11 +37,11 @@ type fileResourceModel struct {
 	Content types.String `tfsdk:"content"`
 }
 
-func (file *FileResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (file *fileResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_file"
 }
 
-func (file *FileResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (file *fileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "file resource",
 
@@ -70,17 +70,19 @@ func (file *FileResource) Schema(ctx context.Context, req resource.SchemaRequest
 	}
 }
 
-func (file *FileResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (file *fileResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 
 }
 
-func (file *FileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan fileResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
+
 	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), plan.Content.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create file", err.Error())
@@ -89,28 +91,31 @@ func (file *FileResource) Create(ctx context.Context, req resource.CreateRequest
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 }
 
-func (file *FileResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model fileResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 }
 
-func (file *FileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (file *fileResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	// todo: implement update
 }
 
-func (file *FileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (file *fileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model fileResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -122,6 +127,6 @@ func (file *FileResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 }
 
-func (file *FileResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (file *fileResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

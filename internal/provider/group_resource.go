@@ -19,17 +19,17 @@ import (
 // todo:add integration tests
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &GroupResource{}
-var _ resource.ResourceWithImportState = &GroupResource{}
+var _ resource.Resource = &groupResource{}
+var _ resource.ResourceWithImportState = &groupResource{}
 
-func NewGroupResource(p *internalProvider) resource.Resource {
-	return &GroupResource{
+func newGroupResource(p *internalProvider) resource.Resource {
+	return &groupResource{
 		provider: p,
 	}
 }
 
-// GroupResource defines the resource implementation.
-type GroupResource struct {
+// groupResource defines the resource implementation.
+type groupResource struct {
 	provider *internalProvider
 }
 
@@ -38,11 +38,11 @@ type groupResourceModel struct {
 	Gid  types.Int64  `tfsdk:"gid"`
 }
 
-func (group *GroupResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (group *groupResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_group"
 }
 
-func (group *GroupResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (group *groupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Group resource",
 
@@ -59,14 +59,15 @@ func (group *GroupResource) Schema(ctx context.Context, req resource.SchemaReque
 	}
 }
 
-func (group *GroupResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (group *groupResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 
 }
 
-func (group *GroupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (group *groupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan groupResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -82,19 +83,21 @@ func (group *GroupResource) Create(ctx context.Context, req resource.CreateReque
 		resp.Diagnostics.AddError("Failed to get gid", err.Error())
 		return
 	}
+
 	plan.Gid = types.Int64Value(gid)
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
 }
 
-func (group *GroupResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-
+func (group *groupResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model groupResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -110,22 +113,22 @@ func (group *GroupResource) Read(ctx context.Context, req resource.ReadRequest, 
 		model.Gid = types.Int64Value(gid)
 		diags = resp.State.Set(ctx, model)
 		resp.Diagnostics.Append(diags...)
+
 		if diags.HasError() {
 			return
 		}
 	}
-
 }
 
-func (group *GroupResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (group *groupResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	// todo: implement me
 }
 
-func (group *GroupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-
+func (group *groupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model groupResourceModel
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
+
 	if diags.HasError() {
 		return
 	}
@@ -137,32 +140,35 @@ func (group *GroupResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 }
 
-func (group *GroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (group *groupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (group *GroupResource) getGid(ctx context.Context, name string) (int64, error) {
-
+func (group *groupResource) getGid(ctx context.Context, name string) (int64, error) {
 	out, err := group.provider.machineAccessClient.RunCommand(ctx, "getent group")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
+
 	name = strings.Replace(name, "\"", "", -1)
 	tflog.Debug(ctx, "name: "+name)
-	for _, line := range strings.Split(string(out), "\n") {
-		line_parts := strings.Split(line, ":")
-		tflog.Debug(ctx, "Line: "+strings.Join(line_parts, "\t"))
 
-		if line_parts[0] == name {
-			stringId := line_parts[2]
-			id, err := strconv.ParseInt(stringId, 10, 64)
+	for _, line := range strings.Split(string(out), "\n") {
+		lineParts := strings.Split(line, ":")
+		tflog.Debug(ctx, "Line: "+strings.Join(lineParts, "\t"))
+
+		if lineParts[0] == name {
+			stringID := lineParts[2]
+			id, err := strconv.ParseInt(stringID, 10, 64)
+
 			if err != nil {
-				return 0, fmt.Errorf("failed to parse gid ('%s'): %w", stringId, err)
+				return 0, fmt.Errorf("failed to parse gid ('%s'): %w", stringID, err)
 			}
+
 			return id, nil
-		} else {
-			tflog.Debug(ctx, "Line does not start with name")
 		}
+
+		tflog.Debug(ctx, "Line does not start with name")
 	}
 
 	return 0, fmt.Errorf("group not found")
