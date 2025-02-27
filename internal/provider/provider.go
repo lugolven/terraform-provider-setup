@@ -89,11 +89,11 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 	}
 
 	sshClientBuild := clients.CreateSSHMachineAccessClientBuilder(data.User.ValueString(), data.Host.ValueString(), port)
-	if data.PrivateKey.IsNull() {
+	if data.PrivateKey.ValueString() != "" {
 		sshClientBuild.WithPrivateKeyPath(data.PrivateKey.ValueString())
 	}
 
-	if data.SSHAgent.IsNull() {
+	if data.SSHAgent.ValueString() != "" {
 		sshClientBuild.WithAgent(data.SSHAgent.ValueString())
 	}
 
