@@ -92,6 +92,7 @@ func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (Machin
 	addr := fmt.Sprintf("%v:%v", builder.host, builder.port)
 	tflog.Debug(ctx, "Dialing "+addr)
 	conn, err := ssh.Dial("tcp", addr, sshConfig)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}

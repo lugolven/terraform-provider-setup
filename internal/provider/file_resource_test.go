@@ -13,6 +13,8 @@ import (
 )
 
 func TestFileResource(t *testing.T) {
+	const expectedStat = "root root 644\n"
+
 	t.Run("Test create", func(t *testing.T) {
 		// Arrange
 		keyPath, err := os.CreateTemp("", "key")
@@ -38,7 +40,7 @@ func TestFileResource(t *testing.T) {
 			},
 			Steps: []resource.TestStep{
 				{
-					Config: testFileResourceConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port), "/tmp/test.txt", "0644", 0, 0, "hello world"),
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "0644", 0, 0, "hello world"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "0644"),
@@ -66,7 +68,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							if stat != "root root 644\n" {
+							if stat != expectedStat {
 								return fmt.Errorf("unexpected stat: %s", stat)
 							}
 
@@ -75,7 +77,7 @@ func TestFileResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testFileResourceConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port), "/tmp/test.txt", "0644", 0, 0, "world hello"),
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "0644", 0, 0, "world hello"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "0644"),
@@ -103,7 +105,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							if stat != "root root 644\n" {
+							if stat != expectedStat {
 								return fmt.Errorf("unexpected stat: %s", stat)
 							}
 
@@ -139,7 +141,7 @@ func TestFileResource(t *testing.T) {
 	})
 }
 
-func testProviderConfig(private_key string, user string, host string, port string) string {
+func testProviderConfig(privateKey string, user string, host string, port string) string {
 	return fmt.Sprintf(`
 	provider "setup" {
 		private_key = "%s"
@@ -147,16 +149,11 @@ func testProviderConfig(private_key string, user string, host string, port strin
 		host        = "%s"
 		port        = "%s"
 	}
-		`, private_key, user, host, port)
+		`, privateKey, user, host, port)
 }
 
-func testFileResourceConfig(
-	private_key string, user string, host string, port string,
-	path string,
-	mode string, owner int, group int, content string) string {
-	providerConfig := testProviderConfig(private_key, user, host, port)
-	providerConfig += fmt.Sprintf(`
-
+func testFileResourceConfig(path string, mode string, owner int, group int, content string) string {
+	return fmt.Sprintf(`
 resource "setup_file" "file" {
 	path    = "%s"
 	mode    = "%s"
@@ -165,6 +162,4 @@ resource "setup_file" "file" {
 	content = "%s"
 }
 `, path, mode, owner, group, content)
-
-	return providerConfig
 }

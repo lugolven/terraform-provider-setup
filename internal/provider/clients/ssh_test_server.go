@@ -25,6 +25,7 @@ import (
 //go:embed test_server.tar
 var testServerTar []byte
 
+// StartSSHAgent starts a new ssh agent and adds the given key to it.
 func StartSSHAgent(t *testing.T, keyPath string) (string, func()) {
 	socket, err := os.MkdirTemp("/tmp", "socket")
 	if err != nil {
@@ -74,6 +75,7 @@ func StartSSHAgent(t *testing.T, keyPath string) (string, func()) {
 	}
 }
 
+// CreateSSHKey creates a new ssh key pair at the given path.
 func CreateSSHKey(t *testing.T, keyPath string) error {
 	t.Log("Creating ssh key")
 
@@ -101,6 +103,7 @@ func CreateSSHKey(t *testing.T, keyPath string) error {
 	return nil
 }
 
+// StartDockerSSHServer starts a new docker container with an ssh server that accepts the given public key.
 func StartDockerSSHServer(t *testing.T, authorizedKeysPath string) (port int, stop func(), err error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -210,7 +213,6 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string) (port int, st
 	}()
 
 	return port, func() {
-
 		if err := cli.ContainerStop(ctx, containerResponse.ID, container.StopOptions{}); err != nil {
 			t.Fatalf("failed to stop container: %v", err)
 		}
@@ -252,21 +254,21 @@ func getFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-type Prefixer struct {
+type prefixer struct {
 	prefixFunc      func() string
 	writer          io.Writer
 	trailingNewline bool
 	buf             bytes.Buffer // reuse buffer to save allocations
 }
 
-// New creates a new Prefixer that forwards all calls to Write() to writer.Write() with all lines prefixed with the
+// NewPrefixer creates a new Prefixer that forwards all calls to Write() to writer.Write() with all lines prefixed with the
 // return value of prefixFunc. Having a function instead of a static prefix allows to print timestamps or other changing
 // information.
-func NewPrefixer(writer io.Writer, prefixFunc func() string) *Prefixer {
-	return &Prefixer{prefixFunc: prefixFunc, writer: writer, trailingNewline: true}
+func NewPrefixer(writer io.Writer, prefixFunc func() string) *prefixer {
+	return &prefixer{prefixFunc: prefixFunc, writer: writer, trailingNewline: true}
 }
 
-func (pf *Prefixer) Write(payload []byte) (int, error) {
+func (pf *prefixer) Write(payload []byte) (int, error) {
 	pf.buf.Reset() // clear the buffer
 
 	for _, b := range payload {
@@ -290,6 +292,7 @@ func (pf *Prefixer) Write(payload []byte) (int, error) {
 		if n > len(payload) {
 			n = len(payload)
 		}
+
 		return n, err
 	}
 
@@ -299,7 +302,7 @@ func (pf *Prefixer) Write(payload []byte) (int, error) {
 
 // EnsureNewline prints a newline if the last character written wasn't a newline unless nothing has ever been written.
 // The purpose of this method is to avoid ending the output in the middle of the line.
-func (pf *Prefixer) EnsureNewline() {
+func (pf *prefixer) EnsureNewline() {
 	if !pf.trailingNewline {
 		fmt.Fprintln(pf.writer)
 	}

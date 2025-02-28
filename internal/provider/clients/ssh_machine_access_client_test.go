@@ -72,6 +72,7 @@ func TestSshRunCommand(t *testing.T) {
 		defer stopServer()
 
 		var client MachineAccessClient
+
 		err = retry.Do(func() error {
 			var dialErr error
 			client, dialErr = CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithAgent(socket).Build(t.Context())
