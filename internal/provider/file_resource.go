@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -83,7 +84,7 @@ func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), plan.Content.String())
+	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), strings.TrimPrefix(strings.TrimSuffix(plan.Content.String(), "\""), "\""))
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create file", err.Error())
 		return
@@ -107,8 +108,27 @@ func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 }
 
-func (file *fileResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// todo: implement update
+func (file *fileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan fileResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), strings.TrimPrefix(strings.TrimSuffix(plan.Content.String(), "\""), "\""))
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create file", err.Error())
+		return
+	}
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
 func (file *fileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

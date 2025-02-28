@@ -97,7 +97,7 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 		sshClientBuild.WithAgent(data.SSHAgent.ValueString())
 	}
 
-	p.machineAccessClient, err = sshClientBuild.Build()
+	p.machineAccessClient, err = sshClientBuild.Build(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create SSH client", err.Error())
 		return

@@ -12,11 +12,13 @@ ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 ${GOBIN}/terraform-provider-setup: **.go go.*
 	go install
 
-build: ${GOBIN}/terraform-provider-setup
+internal/provider/clients/test_server.tar: internal/provider/clients/test_server/*
+	cd internal/provider/clients/test_server && tar -cvf ../test_server.tar .
 
+build: ${GOBIN}/terraform-provider-setup internal/provider/clients/test_server.tar
 
-tests: 
-	go test -v ./...
+tests: internal/provider/clients/test_server.tar
+	TF_ACC=True go test -v ./...
 
 test-terraform: build
 	cd test && rm -rf .terraform || true
