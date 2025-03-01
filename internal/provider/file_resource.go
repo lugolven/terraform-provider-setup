@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -101,6 +102,47 @@ func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest
 func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model fileResourceModel
 	diags := req.State.Get(ctx, &model)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	// read the file content
+	content, err := file.provider.machineAccessClient.RunCommand(ctx, "cat "+model.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read file", err.Error())
+		return
+	}
+
+	model.Content = types.StringValue(content)
+
+	// get the file stat
+	stat, err := file.provider.machineAccessClient.RunCommand(ctx, "stat -c '%u %g %a' "+model.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read file stat", err.Error())
+		return
+	}
+
+	statParts := strings.Split(strings.Trim(stat, "\n"), " ")
+	owner, err := strconv.ParseInt(statParts[0], 10, 64)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse owner", err.Error())
+		return
+	}
+
+	group, err := strconv.ParseInt(statParts[1], 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse group", err.Error())
+		return
+	}
+
+	model.Owner = types.Int64Value(owner)
+	model.Group = types.Int64Value(group)
+	model.Mode = types.StringValue(statParts[2])
+
+	diags = resp.State.Set(ctx, model)
 	resp.Diagnostics.Append(diags...)
 
 	if diags.HasError() {

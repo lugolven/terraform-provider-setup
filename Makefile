@@ -55,5 +55,4 @@ ${GOBIN}/tools/golangci-lint: ${GOBIN}/tools
 lint:${GOBIN}/tools/golangci-lint
 	${GOBIN}/tools/golangci-lint//golangci-lint run --config ${ROOT_DIR}/.golangci.yml
 
-
 ci: build tests lint

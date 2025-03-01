@@ -12,7 +12,7 @@ import (
 func TestSshRunCommand(t *testing.T) {
 	expectedHelloOutput := "hello\n"
 
-	t.Run("successful command execution with pricate key", func(t *testing.T) {
+	t.Run("successful command execution with private key", func(t *testing.T) {
 		// Arrange
 		keyPath, err := os.CreateTemp("", "key")
 		if err != nil {
@@ -37,7 +37,7 @@ func TestSshRunCommand(t *testing.T) {
 		}
 
 		// Act
-		output, err := client.RunCommand(ctx, "echo hello")
+		output, err := client.RunCommand(t.Context(), "echo hello")
 
 		// Assert
 		if err != nil {
@@ -87,7 +87,7 @@ func TestSshRunCommand(t *testing.T) {
 		}
 
 		// Act
-		output, err := client.RunCommand(ctx, "echo hello")
+		output, err := client.RunCommand(t.Context(), "echo hello")
 
 		// Assert
 		if err != nil {

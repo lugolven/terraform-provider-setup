@@ -136,8 +136,84 @@ func (user *userResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 }
 
-func (user *userResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// todo: implement me
+func (user *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var oldModel userResourceModel
+	diags := req.State.Get(ctx, &oldModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	var newModel userResourceModel
+	diags = req.Plan.Get(ctx, &newModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	if oldModel.Name != newModel.Name {
+		_, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo usermod -l "+newModel.Name.String()+" "+oldModel.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update user", err.Error())
+			return
+		}
+	}
+
+	// Remove groups that are not in the new model
+	for _, group := range oldModel.Groups.Elements() {
+		found := false
+
+		for _, newGroup := range newModel.Groups.Elements() {
+			if group.Equal(newGroup) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			_, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo deluser "+oldModel.Name.String()+" "+group.String())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to remove user from group", err.Error())
+				return
+			}
+		}
+	}
+
+	// Add groups that are in the new model but not in the old model
+	for _, newGroup := range newModel.Groups.Elements() {
+		found := false
+
+		for _, group := range oldModel.Groups.Elements() {
+			if group.Equal(newGroup) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			err := user.addUserToGroup(ctx, newModel.Name.String(), newGroup.String())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to add user to group", err.Error())
+				return
+			}
+		}
+	}
+
+	uid, err := user.getUID(ctx, newModel.Name.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get uid", err.Error())
+		return
+	}
+
+	newModel.UID = types.Int64Value(uid)
+	diags = resp.State.Set(ctx, newModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
 func (user *userResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
