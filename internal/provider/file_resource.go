@@ -5,6 +5,8 @@ package provider
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -83,7 +85,7 @@ func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), plan.Content.String())
+	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), strings.TrimPrefix(strings.TrimSuffix(plan.Content.String(), "\""), "\""))
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create file", err.Error())
 		return
@@ -105,10 +107,70 @@ func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, re
 	if diags.HasError() {
 		return
 	}
+
+	// read the file content
+	content, err := file.provider.machineAccessClient.RunCommand(ctx, "cat "+model.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read file", err.Error())
+		return
+	}
+
+	model.Content = types.StringValue(content)
+
+	// get the file stat
+	stat, err := file.provider.machineAccessClient.RunCommand(ctx, "stat -c '%u %g %a' "+model.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read file stat", err.Error())
+		return
+	}
+
+	statParts := strings.Split(strings.Trim(stat, "\n"), " ")
+	owner, err := strconv.ParseInt(statParts[0], 10, 64)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse owner", err.Error())
+		return
+	}
+
+	group, err := strconv.ParseInt(statParts[1], 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse group", err.Error())
+		return
+	}
+
+	model.Owner = types.Int64Value(owner)
+	model.Group = types.Int64Value(group)
+	model.Mode = types.StringValue(statParts[2])
+
+	diags = resp.State.Set(ctx, model)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
-func (file *fileResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// todo: implement update
+func (file *fileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan fileResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), strings.TrimPrefix(strings.TrimSuffix(plan.Content.String(), "\""), "\""))
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to create file", err.Error())
+		return
+	}
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
 func (file *fileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

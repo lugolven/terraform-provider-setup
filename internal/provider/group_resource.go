@@ -120,8 +120,40 @@ func (group *groupResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 }
 
-func (group *groupResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// todo: implement me
+func (group *groupResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var oldModel groupResourceModel
+	diags := req.State.Get(ctx, &oldModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	var newModel groupResourceModel
+	diags = req.Plan.Get(ctx, &newModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	if oldModel.Name.String() != newModel.Name.String() {
+		_, err := group.provider.machineAccessClient.RunCommand(ctx, "sudo groupmod -n "+newModel.Name.String()+" "+oldModel.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to update group", err.Error())
+			return
+		}
+	}
+
+	gid, err := group.getGid(ctx, newModel.Name.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get gid", err.Error())
+		return
+	}
+
+	newModel.Gid = types.Int64Value(gid)
+	diags = resp.State.Set(ctx, newModel)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (group *groupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

@@ -77,7 +77,7 @@ func (builder *sshMachineAccessClientBuilder) buildAuthMethod() ([]ssh.AuthMetho
 }
 
 // CreateSSHMachineAccessClient creates a new ssh machine access client.
-func (builder *sshMachineAccessClientBuilder) Build() (MachineAccessClient, error) {
+func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (MachineAccessClient, error) {
 	auth, err := builder.buildAuthMethod()
 	if err != nil {
 		return nil, err
@@ -90,8 +90,9 @@ func (builder *sshMachineAccessClientBuilder) Build() (MachineAccessClient, erro
 	}
 
 	addr := fmt.Sprintf("%v:%v", builder.host, builder.port)
-
+	tflog.Debug(ctx, "Dialing "+addr)
 	conn, err := ssh.Dial("tcp", addr, sshConfig)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}

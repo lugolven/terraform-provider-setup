@@ -1,7 +1,6 @@
 package clients
 
 import (
-	"context"
 	"os"
 	"os/user"
 	"strconv"
@@ -11,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var ctx = context.Background()
-
 func TesLocalRunCommand(t *testing.T) {
 	client, err := CreateLocalMachineAccessClient()
 	if err != nil {
@@ -20,13 +17,13 @@ func TesLocalRunCommand(t *testing.T) {
 	}
 
 	t.Run("successful command execution", func(t *testing.T) {
-		output, err := client.RunCommand(ctx, "echo hello")
+		output, err := client.RunCommand(t.Context(), "echo hello")
 		assert.NoError(t, err)
 		assert.Equal(t, "hello\n", output)
 	})
 
 	t.Run("failed command execution", func(t *testing.T) {
-		_, err := client.RunCommand(ctx, "invalidcommand")
+		_, err := client.RunCommand(t.Context(), "invalidcommand")
 		assert.Error(t, err)
 	})
 }
@@ -48,7 +45,7 @@ func TestWriteFile(t *testing.T) {
 
 	t.Run("successful file write", func(t *testing.T) {
 		// Act
-		err := client.WriteFile(ctx, testFilePath, "0644", user.Uid, user.Gid, testContent)
+		err := client.WriteFile(t.Context(), testFilePath, "0644", user.Uid, user.Gid, testContent)
 		if err != nil {
 			t.Fatal(err)
 		}
