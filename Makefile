@@ -66,7 +66,7 @@ release: bin/goreleaser build-assets
 	bin/goreleaser release --clean
 
 create-release-v%:
-	$(eval VERSION := $(subst release-,,$@))
+	$(eval VERSION := $(subst create-release-,,$@))
 	@echo "Releasing version ${VERSION}"
 	git tag -a ${VERSION} -m "Release ${VERSION}"
 	git push origin ${VERSION}
