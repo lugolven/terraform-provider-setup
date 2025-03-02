@@ -59,8 +59,7 @@ func TestAptPackagesResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.name", "vlc"),
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.absent", "true"),
 
-						func(state *terraform.State) error {
-							t.Logf("state: %v", state)
+						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
 							if err != nil {
 								return err
