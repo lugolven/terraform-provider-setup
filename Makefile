@@ -15,9 +15,11 @@ ${GOBIN}/terraform-provider-setup: **.go go.*
 internal/provider/clients/test_server.tar: internal/provider/clients/test_server/*
 	cd internal/provider/clients/test_server && tar -cvf ../test_server.tar .
 
-build: ${GOBIN}/terraform-provider-setup internal/provider/clients/test_server.tar
+build-assets: internal/provider/clients/test_server.tar
 
-tests: internal/provider/clients/test_server.tar
+build: ${GOBIN}/terraform-provider-setup build-assets
+
+tests: build-assets
 	TF_ACC=True go test -v ./...
 
 test-terraform: build
@@ -56,3 +58,15 @@ lint:${GOBIN}/tools/golangci-lint
 	${GOBIN}/tools/golangci-lint//golangci-lint run --config ${ROOT_DIR}/.golangci.yml
 
 ci: build tests lint
+
+bin/goreleaser:
+	go install github.com/goreleaser/goreleaser/v2@latest
+	
+release: bin/goreleaser build-assets
+	bin/goreleaser release --clean
+
+create-release-v%:
+	$(eval VERSION := $(subst release-,,$@))
+	@echo "Releasing version ${VERSION}"
+	git tag -a ${VERSION} -m "Release ${VERSION}"
+	git push origin ${VERSION}
