@@ -56,3 +56,9 @@ lint:${GOBIN}/tools/golangci-lint
 	${GOBIN}/tools/golangci-lint//golangci-lint run --config ${ROOT_DIR}/.golangci.yml
 
 ci: build tests lint
+
+release-v%:
+	$(eval VERSION := $(subst release-,,$@))
+	@echo "Releasing version ${VERSION}"
+	git tag -a ${VERSION} -m "Release ${VERSION}"
+	git push origin ${VERSION}
