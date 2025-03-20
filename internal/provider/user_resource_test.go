@@ -176,7 +176,6 @@ func TestUserResource(t *testing.T) {
 				},
 			},
 		})
-
 	})
 }
 

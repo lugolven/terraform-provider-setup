@@ -115,6 +115,7 @@ func (aptPackages *aptPackagesResource) Create(ctx context.Context, req resource
 	}
 
 	toRemove := []string{}
+
 	for _, element := range plan.Package {
 		if !element.Absent.ValueBool() {
 			continue
