@@ -115,7 +115,6 @@ func (aptPackages *aptPackagesResource) Create(ctx context.Context, req resource
 	}
 
 	toRemove := []string{}
-
 	for _, element := range plan.Package {
 		if !element.Absent.ValueBool() {
 			continue
@@ -147,8 +146,97 @@ func (aptPackages *aptPackagesResource) Read(_ context.Context, _ resource.ReadR
 
 }
 
-func (aptPackages *aptPackagesResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
+func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var oldModel aptPackagesResourceModel
+	diags := req.State.Get(ctx, &oldModel)
+	resp.Diagnostics.Append(diags...)
 
+	if diags.HasError() {
+		return
+	}
+
+	var newModel aptPackagesResourceModel
+	diags = req.Plan.Get(ctx, &newModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	currentlyInstalledPackages, err := aptPackages.listCurrentlyInstalledPackages(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to list currently installed apt packages", err.Error())
+		return
+	}
+
+	tflog.Debug(ctx, "Currently installed packages: "+strings.Join(currentlyInstalledPackages, ", "))
+
+	toRemoveSet := map[string]bool{}
+
+	for _, element := range oldModel.Package {
+		if element.Absent.ValueBool() {
+			continue
+		}
+
+		pkg := strings.Trim(element.Name.String(), "\"")
+		if slices.Contains(currentlyInstalledPackages, pkg) {
+			toRemoveSet[pkg] = true
+		}
+	}
+
+	toInsall := []string{}
+
+	for _, element := range newModel.Package {
+		if element.Absent.ValueBool() {
+			continue
+		}
+
+		pkg := strings.Trim(element.Name.String(), "\"")
+		if slices.Contains(currentlyInstalledPackages, pkg) {
+			tflog.Warn(ctx, "Package "+pkg+" is already installed")
+		} else {
+			toInsall = append(toInsall, pkg)
+		}
+
+		delete(toRemoveSet, pkg)
+	}
+
+	err = aptPackages.ensureInstalled(ctx, toInsall)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to install apt packages", err.Error())
+		return
+	}
+
+	for _, element := range newModel.Package {
+		if !element.Absent.ValueBool() {
+			continue
+		}
+
+		pkg := strings.Trim(element.Name.String(), "\"")
+		if slices.Contains(currentlyInstalledPackages, pkg) {
+			toRemoveSet[pkg] = true
+		} else {
+			tflog.Warn(ctx, "Package "+pkg+" is not installed")
+		}
+	}
+
+	toRemove := []string{}
+	for key := range toRemoveSet {
+		toRemove = append(toRemove, key)
+	}
+
+	err = aptPackages.ensureRemoved(ctx, toRemove)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to remove apt packages", err.Error())
+		return
+	}
+
+	diags = resp.State.Set(ctx, newModel)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
 func (aptPackages *aptPackagesResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

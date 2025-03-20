@@ -134,6 +134,12 @@ func (client *sshMachineAccessClient) RunCommand(ctx context.Context, command st
 	out, err := session.CombinedOutput(command)
 
 	if err != nil {
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			return string(out), ExitError{
+				ExitCode: exitErr.ExitStatus(),
+			}
+		}
+
 		return string(out), fmt.Errorf("failed to run command: %w", err)
 	}
 

@@ -114,6 +114,70 @@ func TestUserResource(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("Test with user already created", func(t *testing.T) {
+		// Arrange
+		keyPath, err := os.CreateTemp("", "key")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(keyPath.Name())
+
+		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(keyPath.Name() + ".pub")
+
+		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer stopServer()
+
+		sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// create the user
+		if out, err := sshClient.RunCommand(t.Context(), "sudo useradd testuser"); err != nil {
+			t.Log(out)
+			t.Fatal(err)
+		}
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
+			},
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfig("testuser", "testgroup"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							if err != nil {
+								return err
+							}
+
+							content, err := sshClient.RunCommand(t.Context(), "cat /etc/passwd")
+							if err != nil {
+								return err
+							}
+
+							if !strings.Contains(content, "testuser") {
+								return fmt.Errorf("user not found")
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+
+	})
 }
 
 func testUserResourceConfig(name string, groupName string) string {

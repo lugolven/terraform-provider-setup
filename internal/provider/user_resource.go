@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"terraform-provider-setup/internal/provider/clients"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -80,8 +81,12 @@ func (user *userResource) Create(ctx context.Context, req resource.CreateRequest
 	// todo: consider adding a configation for elevated actions
 	out, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo useradd -ms /bin/bash "+plan.Name.String())
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to create user. Err="+err.Error()+"\nout = "+string(out), err.Error())
-		return
+		if exitErr, ok := err.(clients.ExitError); ok && exitErr.ExitCode == 9 {
+			tflog.Debug(ctx, "User already exists")
+		} else {
+			resp.Diagnostics.AddError("Failed to create user. Err="+err.Error()+"\nout = "+string(out), err.Error())
+			return
+		}
 	}
 
 	uid, err := user.getUID(ctx, plan.Name.String())
