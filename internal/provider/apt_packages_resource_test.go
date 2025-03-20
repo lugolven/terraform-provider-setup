@@ -82,6 +82,97 @@ func TestAptPackagesResource(t *testing.T) {
 						},
 					),
 				},
+				{
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testAptPackagesResourceConfig([]struct {
+						name   string
+						absent bool
+					}{
+						{
+							name:   "vlc",
+							absent: true,
+						},
+					}),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.name", "vlc"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.absent", "true"),
+
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							if err != nil {
+								return err
+							}
+
+							allPackages, err := sshClient.RunCommand(t.Context(), "dpkg -l")
+							if err != nil {
+								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
+							}
+
+							if strings.Contains(allPackages, "curl") {
+								return fmt.Errorf("package curl found")
+							}
+
+							if strings.Contains(allPackages, "vlc") {
+								return fmt.Errorf("package vlc found")
+							}
+
+							return nil
+						},
+					),
+				},
+
+				{
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testAptPackagesResourceConfig([]struct {
+						name   string
+						absent bool
+					}{
+						{
+							name:   "vlc",
+							absent: true,
+						},
+						{
+							name:   "git",
+							absent: false,
+						},
+						{
+							name:   "nmap",
+							absent: false,
+						},
+					}),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.name", "vlc"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.absent", "true"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.name", "git"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.absent", "false"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.2.name", "nmap"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.2.absent", "false"),
+
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							if err != nil {
+								return err
+							}
+
+							allPackages, err := sshClient.RunCommand(t.Context(), "dpkg -l")
+							if err != nil {
+								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
+							}
+
+							if strings.Contains(allPackages, "vlc") {
+								return fmt.Errorf("package vlc found")
+							}
+
+							if !strings.Contains(allPackages, "git") {
+								return fmt.Errorf("package git not found")
+							}
+
+							if !strings.Contains(allPackages, "nmap") {
+								return fmt.Errorf("package nmap not found")
+							}
+
+							return nil
+						},
+					),
+				},
 			},
 		})
 	})
