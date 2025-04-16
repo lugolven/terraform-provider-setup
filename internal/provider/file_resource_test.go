@@ -15,7 +15,7 @@ import (
 func TestFileResource(t *testing.T) {
 	const expectedStat = "root root 644\n"
 
-	const expectedContent = "hello\nworld"
+	const expectedContent = "hello\nworld\n"
 
 	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Arrange
@@ -43,7 +43,7 @@ func TestFileResource(t *testing.T) {
 			},
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, expectedContent),
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
@@ -85,7 +85,7 @@ func TestFileResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
 						resource.TestCheckResourceAttr("setup_file.file", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
-						resource.TestCheckResourceAttr("setup_file.file", "content", "world hello"),
+						resource.TestCheckResourceAttr("setup_file.file", "content", "world hello\n"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
 							if err != nil {
@@ -97,7 +97,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							if content != "world hello" {
+							if content != "world hello\n" {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
@@ -167,7 +167,7 @@ func TestFileResource(t *testing.T) {
 			},
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, expectedContent),
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
@@ -214,7 +214,7 @@ func TestFileResource(t *testing.T) {
 							t.Fatalf("failed to update file: %s\n %v", out, err)
 						}
 					},
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, expectedContent),
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
