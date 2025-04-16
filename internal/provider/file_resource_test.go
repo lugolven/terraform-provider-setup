@@ -15,7 +15,7 @@ import (
 func TestFileResource(t *testing.T) {
 	const expectedStat = "root root 644\n"
 
-	const expectedContent = "hello world"
+	const expectedContent = "hello\nworld"
 
 	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Arrange
@@ -261,7 +261,9 @@ resource "setup_file" "file" {
 	mode    = "%s"
 	owner   = %d
 	group   = %d
-	content = "%s"
+	content = <<EOT
+%s
+EOT
 }
 `, path, mode, owner, group, content)
 }

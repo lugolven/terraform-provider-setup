@@ -78,7 +78,7 @@ func (group *groupResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	gid, err := group.getGid(ctx, plan.Name.String())
+	gid, err := group.getGid(ctx, plan.Name)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get gid", err.Error())
 		return
@@ -102,7 +102,7 @@ func (group *groupResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	gid, err := group.getGid(ctx, model.Name.String())
+	gid, err := group.getGid(ctx, model.Name)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get gid  "+err.Error(), err.Error())
@@ -145,7 +145,7 @@ func (group *groupResource) Update(ctx context.Context, req resource.UpdateReque
 		}
 	}
 
-	gid, err := group.getGid(ctx, newModel.Name.String())
+	gid, err := group.getGid(ctx, newModel.Name)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get gid", err.Error())
 		return
@@ -176,13 +176,17 @@ func (group *groupResource) ImportState(ctx context.Context, req resource.Import
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (group *groupResource) getGid(ctx context.Context, name string) (int64, error) {
+func (group *groupResource) getGid(ctx context.Context, inputName types.String) (int64, error) {
 	out, err := group.provider.machineAccessClient.RunCommand(ctx, "getent group")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
 
-	name = strings.Replace(name, "\"", "", -1)
+	name, err := strconv.Unquote(inputName.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to unquote name: %w", err)
+	}
+
 	tflog.Debug(ctx, "name: "+name)
 
 	for _, line := range strings.Split(string(out), "\n") {
