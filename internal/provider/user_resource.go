@@ -89,7 +89,7 @@ func (user *userResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	uid, err := user.getUID(ctx, plan.Name.String())
+	uid, err := user.getUID(ctx, plan.Name)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get uid", err.Error())
 		return
@@ -123,7 +123,7 @@ func (user *userResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	uid, err := user.getUID(ctx, model.Name.String())
+	uid, err := user.getUID(ctx, model.Name)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get uid  "+err.Error(), err.Error())
@@ -206,7 +206,7 @@ func (user *userResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
-	uid, err := user.getUID(ctx, newModel.Name.String())
+	uid, err := user.getUID(ctx, newModel.Name)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get uid", err.Error())
 		return
@@ -241,13 +241,17 @@ func (user *userResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (user *userResource) getUID(ctx context.Context, name string) (int64, error) {
+func (user *userResource) getUID(ctx context.Context, inputName types.String) (int64, error) {
 	out, err := user.provider.machineAccessClient.RunCommand(ctx, "cat /etc/passwd")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get passwd file: %w.\n out= %s", err, out)
 	}
 
-	name = strings.Replace(name, "\"", "", -1)
+	name, err := strconv.Unquote(inputName.String())
+	if err != nil {
+		return 0, fmt.Errorf("failed to unquote name: %w", err)
+	}
+
 	tflog.Debug(ctx, "name: "+name)
 
 	for _, line := range strings.Split(string(out), "\n") {

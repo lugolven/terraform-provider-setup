@@ -85,7 +85,13 @@ func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), strings.TrimPrefix(strings.TrimSuffix(plan.Content.String(), "\""), "\""))
+	content, err := strconv.Unquote(plan.Content.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+		return
+	}
+
+	err = file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), content)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create file", err.Error())
 		return
@@ -159,7 +165,13 @@ func (file *fileResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	err := file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), strings.TrimPrefix(strings.TrimSuffix(plan.Content.String(), "\""), "\""))
+	content, err := strconv.Unquote(plan.Content.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+		return
+	}
+
+	err = file.provider.machineAccessClient.WriteFile(ctx, plan.Path.String(), plan.Mode.String(), plan.Owner.String(), plan.Group.String(), content)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create file", err.Error())
 		return

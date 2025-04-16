@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -100,7 +101,12 @@ func (aptPackages *aptPackagesResource) Create(ctx context.Context, req resource
 			continue
 		}
 
-		pkg := strings.Trim(element.Name.String(), "\"")
+		pkg, err := strconv.Unquote(element.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+			return
+		}
+
 		if slices.Contains(currentlyInstalledPackages, pkg) {
 			tflog.Warn(ctx, "Package "+pkg+" is already installed")
 		} else {
@@ -121,7 +127,12 @@ func (aptPackages *aptPackagesResource) Create(ctx context.Context, req resource
 			continue
 		}
 
-		pkg := strings.Trim(element.Name.String(), "\"")
+		pkg, err := strconv.Unquote(element.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+			return
+		}
+
 		if slices.Contains(currentlyInstalledPackages, pkg) {
 			toRemove = append(toRemove, pkg)
 		} else {
@@ -179,7 +190,12 @@ func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource
 			continue
 		}
 
-		pkg := strings.Trim(element.Name.String(), "\"")
+		pkg, err := strconv.Unquote(element.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+			return
+		}
+
 		if slices.Contains(currentlyInstalledPackages, pkg) {
 			toRemoveSet[pkg] = true
 		}
@@ -192,7 +208,12 @@ func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource
 			continue
 		}
 
-		pkg := strings.Trim(element.Name.String(), "\"")
+		pkg, err := strconv.Unquote(element.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+			return
+		}
+
 		if slices.Contains(currentlyInstalledPackages, pkg) {
 			tflog.Warn(ctx, "Package "+pkg+" is already installed")
 		} else {
@@ -213,7 +234,12 @@ func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource
 			continue
 		}
 
-		pkg := strings.Trim(element.Name.String(), "\"")
+		pkg, err := strconv.Unquote(element.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+			return
+		}
+
 		if slices.Contains(currentlyInstalledPackages, pkg) {
 			toRemoveSet[pkg] = true
 		} else {
@@ -262,7 +288,12 @@ func (aptPackages *aptPackagesResource) Delete(ctx context.Context, req resource
 			continue
 		}
 
-		pkg := strings.Trim(element.Name.String(), "\"")
+		pkg, err := strconv.Unquote(element.Name.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to unquote package name", err.Error())
+			return
+		}
+
 		if slices.Contains(currentlyInstalledPackages, pkg) {
 			toRemove = append(toRemove, pkg)
 		} else {
