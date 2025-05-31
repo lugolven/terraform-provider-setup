@@ -104,7 +104,7 @@ func CreateSSHKey(t *testing.T, keyPath string) error {
 }
 
 // StartDockerSSHServer starts a new docker container with an ssh server that accepts the given public key.
-func StartDockerSSHServer(t *testing.T, authorizedKeysPath string) (port int, stop func(), err error) {
+func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPath string) (port int, stop func(), err error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return -1, nil, err
@@ -139,11 +139,6 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string) (port int, st
 		}
 	}
 
-	// _, err = io.Copy(os.Stdout, buildResponse.Body)
-	// if err != nil {
-	// 	log.Fatalf("Copy error: %v", err)
-	// }
-
 	keyContent, err := os.ReadFile(authorizedKeysPath) // #nosec G304 - this is only used for testing
 	if err != nil {
 		return -1, nil, fmt.Errorf("failed to read authorized_keys file: %w", err)
@@ -176,13 +171,15 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string) (port int, st
 		return -1, nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
+	sshClientBuilder := CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(privateKeyPath)
+
 	err = retry.Do(func() error {
-		conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", port))
-		if err != nil {
+		t.Log("Trying to connect to the container via ssh")
+
+		if _, err := sshClientBuilder.Build(t.Context()); err != nil {
+			t.Log("Failed to connect ot the container via ssh")
 			return err
 		}
-
-		conn.Close()
 
 		return nil
 	}, retry.Attempts(60), retry.Delay(1*time.Second))
@@ -190,6 +187,8 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string) (port int, st
 	if err != nil {
 		return -1, nil, fmt.Errorf("failed to connect to container: %w", err)
 	}
+
+	t.Log("Was able to connect to the container via ssh, container is ready.")
 
 	go func() {
 		logs, err := cli.ContainerLogs(ctx, containerResponse.ID, container.LogsOptions{
