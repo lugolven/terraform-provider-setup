@@ -27,7 +27,7 @@ func TestGroupResource(t *testing.T) {
 		}
 		defer os.Remove(keyPath.Name() + ".pub")
 
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub")
+		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func TestGroupResource(t *testing.T) {
 		}
 		defer os.Remove(keyPath.Name() + ".pub")
 
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub")
+		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
 		if err != nil {
 			t.Fatal(err)
 		}

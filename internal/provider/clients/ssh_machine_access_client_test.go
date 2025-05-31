@@ -25,7 +25,7 @@ func TestSshRunCommand(t *testing.T) {
 		}
 		defer os.Remove(keyPath.Name() + ".pub")
 
-		port, stopServer, err := StartDockerSSHServer(t, keyPath.Name()+".pub")
+		port, stopServer, err := StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +65,7 @@ func TestSshRunCommand(t *testing.T) {
 		socket, stopAgent := StartSSHAgent(t, keyPath.Name())
 		defer stopAgent()
 
-		port, stopServer, err := StartDockerSSHServer(t, keyPath.Name()+".pub")
+		port, stopServer, err := StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
 		if err != nil {
 			t.Fatal(err)
 		}
