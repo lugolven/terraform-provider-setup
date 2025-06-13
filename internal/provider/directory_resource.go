@@ -5,6 +5,8 @@ package provider
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -101,10 +103,73 @@ func (directory *directoryResource) Read(ctx context.Context, req resource.ReadR
 	if diags.HasError() {
 		return
 	}
+
+	// get the directory stat
+	stat, err := directory.provider.machineAccessClient.RunCommand(ctx, "sudo stat -c '%u %g %a' "+model.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read directory stat", err.Error())
+		return
+	}
+
+	statParts := strings.Split(strings.Trim(stat, "\n"), " ")
+	if len(statParts) != 3 {
+		resp.Diagnostics.AddError("Failed to parse stat output", stat)
+		return
+	}
+
+	owner, err := strconv.ParseInt(statParts[0], 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse owner", err.Error())
+		return
+	}
+
+	group, err := strconv.ParseInt(statParts[1], 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to parse group", err.Error())
+		return
+	}
+
+	model.Owner = types.Int64Value(owner)
+	model.Group = types.Int64Value(group)
+	model.Mode = types.StringValue(statParts[2])
+
+	diags = resp.State.Set(ctx, model)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
-func (directory *directoryResource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
-	// todo: implement update
+func (directory *directoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan directoryResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	// Update mode
+	_, err := directory.provider.machineAccessClient.RunCommand(ctx, "sudo chmod "+plan.Mode.String()+" "+plan.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update directory mode", err.Error())
+		return
+	}
+
+	// Update owner and group
+	_, err = directory.provider.machineAccessClient.RunCommand(ctx, "sudo chown "+plan.Owner.String()+":"+plan.Group.String()+" "+plan.Path.String())
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update directory owner/group", err.Error())
+		return
+	}
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
 }
 
 func (directory *directoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
