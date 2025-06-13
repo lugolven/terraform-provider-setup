@@ -177,7 +177,19 @@ func (user *userResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 
 		if !found {
-			_, err := user.provider.machineAccessClient.RunCommand(ctx, "sudo deluser "+oldModel.Name.String()+" "+group.String())
+			groupGid, err := strconv.ParseInt(group.String(), 10, 64)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to parse group ID", err.Error())
+				return
+			}
+
+			groupName, err := user.getGroupNameFromGid(ctx, groupGid)
+			if err != nil {
+				tflog.Debug(ctx, "Group with gid does not exist, skipping removal: "+group.String())
+				continue
+			}
+
+			_, err = user.provider.machineAccessClient.RunCommand(ctx, "sudo deluser "+oldModel.Name.String()+" "+groupName)
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to remove user from group", err.Error())
 				return
@@ -281,4 +293,29 @@ func (user *userResource) addUserToGroup(ctx context.Context, name string, group
 	}
 
 	return nil
+}
+
+func (user *userResource) getGroupNameFromGid(ctx context.Context, gid int64) (string, error) {
+	out, err := user.provider.machineAccessClient.RunCommand(ctx, "getent group")
+	if err != nil {
+		return "", fmt.Errorf("failed to get group file: %w.\n out= %s", err, out)
+	}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		lineParts := strings.Split(line, ":")
+		if len(lineParts) < 3 {
+			continue
+		}
+
+		groupGid, err := strconv.ParseInt(lineParts[2], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		if groupGid == gid {
+			return lineParts[0], nil
+		}
+	}
+
+	return "", fmt.Errorf("group with gid %d not found", gid)
 }
