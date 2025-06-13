@@ -16,8 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// todo:add integration tests
-
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &groupResource{}
 var _ resource.ResourceWithImportState = &groupResource{}

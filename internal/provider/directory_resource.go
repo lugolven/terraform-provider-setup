@@ -14,8 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// todo:add integration tests
-
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &directoryResource{}
 var _ resource.ResourceWithImportState = &directoryResource{}

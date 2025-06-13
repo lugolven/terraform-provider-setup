@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// todo:add integration tests
 // Ensure the implementation satisfies the expected interfaces.
 var (
 	_ provider.Provider = &internalProvider{}
