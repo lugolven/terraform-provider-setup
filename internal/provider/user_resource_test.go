@@ -134,17 +134,6 @@ func TestUserResource(t *testing.T) {
 		}
 		defer stopServer()
 
-		sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// create the user
-		if out, err := sshClient.RunCommand(t.Context(), "sudo useradd testuser"); err != nil {
-			t.Log(out)
-			t.Fatal(err)
-		}
-
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
@@ -177,6 +166,88 @@ func TestUserResource(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("Test removing user from group", func(t *testing.T) {
+		// Arrange
+		keyPath, err := os.CreateTemp("", "key")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(keyPath.Name())
+
+		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(keyPath.Name() + ".pub")
+
+		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer stopServer()
+
+		// Create the groups first
+		// sshClient is no longer needed since we removed manual groupadd commands
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
+			},
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfigWithGroups("testuser", []string{"testgroup", "othergroup"}),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							if err != nil {
+								return err
+							}
+
+							content, err := sshClient.RunCommand(t.Context(), "groups testuser")
+							if err != nil {
+								return err
+							}
+
+							if !strings.Contains(content, "testgroup") || !strings.Contains(content, "othergroup") {
+								return fmt.Errorf("user not in expected groups")
+							}
+
+							return nil
+						},
+					),
+				},
+				{
+					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfigWithGroups("testuser", []string{"testgroup"}),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							if err != nil {
+								return err
+							}
+
+							content, err := sshClient.RunCommand(t.Context(), "groups testuser")
+							if err != nil {
+								return err
+							}
+
+							if !strings.Contains(content, "testgroup") {
+								return fmt.Errorf("user not in testgroup")
+							}
+
+							if strings.Contains(content, "othergroup") {
+								return fmt.Errorf("user still in othergroup")
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
 }
 
 func testUserResourceConfig(name string, groupName string) string {
@@ -190,4 +261,25 @@ resource "setup_user" "user" {
 	groups   = [setup_group.group.gid]
 }
 `, groupName, name)
+}
+
+func testUserResourceConfigWithGroups(name string, groupNames []string) string {
+	groupResources := ""
+	groupRefs := make([]string, len(groupNames))
+
+	for i, groupName := range groupNames {
+		groupResources += fmt.Sprintf(`
+resource "setup_group" "group%d" {
+	name = "%s"
+}
+`, i, groupName)
+		groupRefs[i] = fmt.Sprintf("setup_group.group%d.gid", i)
+	}
+
+	return groupResources + fmt.Sprintf(`
+resource "setup_user" "user" {
+	name    = "%s"
+	groups  = [%s]
+}
+`, name, strings.Join(groupRefs, ", "))
 }
