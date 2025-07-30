@@ -65,6 +65,19 @@ bin/goreleaser:
 release: bin/goreleaser build-assets
 	bin/goreleaser release --clean
 
+next-version:
+	$(eval LATEST_TAG := $(shell git tag --sort=-version:refname | head -1))
+	$(eval MAJOR := $(shell echo ${LATEST_TAG} | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1/'))
+	$(eval MINOR := $(shell echo ${LATEST_TAG} | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\2/'))
+	$(eval PATCH := $(shell echo ${LATEST_TAG} | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\3/'))
+	$(eval NEW_PATCH := $(shell echo $$((${PATCH} + 1))))
+	@echo v${MAJOR}.${MINOR}.${NEW_PATCH}
+
+create-release:
+	$(eval NEW_VERSION := $(shell $(MAKE) next-version))
+	@echo "Creating release ${NEW_VERSION}"
+	$(MAKE) create-release-${NEW_VERSION}
+
 create-release-v%:
 	$(eval VERSION := $(subst create-release-,,$@))
 	@echo "Releasing version ${VERSION}"
