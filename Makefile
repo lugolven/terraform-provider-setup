@@ -75,9 +75,9 @@ next-version:
 	@echo v${MAJOR}.${MINOR}.${NEW_PATCH}
 
 create-release-version:
-	$(eval NEW_VERSION := $(shell $(MAKE) next-version))
-	@echo "Creating release ${NEW_VERSION}"
-	$(MAKE) create-release-version-${NEW_VERSION}
+	@NEW_VERSION=$$($(MAKE) next-version); \
+	echo "Creating release $$NEW_VERSION"; \
+	$(MAKE) create-release-version-$$NEW_VERSION
 
 create-release-version-v%:
 	$(eval VERSION := $(subst create-release-version-,,$@))
