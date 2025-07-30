@@ -75,7 +75,7 @@ next-version:
 	@echo v${MAJOR}.${MINOR}.${NEW_PATCH}
 
 create-release-version:
-	$(eval NEW_VERSION := $(shell $(MAKE) next-version))
-	@echo "Creating release ${NEW_VERSION}"
-	git tag -a ${NEW_VERSION} -m "Release ${NEW_VERSION}"
-	git push origin ${NEW_VERSION}
+	@NEW_VERSION=$$($(MAKE) --no-print-directory next-version); \
+	echo "Creating release $$NEW_VERSION"; \
+	git tag -a $$NEW_VERSION -m "Release $$NEW_VERSION"; \
+	git push origin $$NEW_VERSION
