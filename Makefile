@@ -63,6 +63,7 @@ bin/goreleaser:
 	go install github.com/goreleaser/goreleaser/v2@latest
 	
 release: bin/goreleaser build-assets
+	$(MAKE) create-release-version
 	bin/goreleaser release --clean
 
 next-version:
@@ -73,13 +74,13 @@ next-version:
 	$(eval NEW_PATCH := $(shell echo $$((${PATCH} + 1))))
 	@echo v${MAJOR}.${MINOR}.${NEW_PATCH}
 
-create-release:
+create-release-version:
 	$(eval NEW_VERSION := $(shell $(MAKE) next-version))
 	@echo "Creating release ${NEW_VERSION}"
-	$(MAKE) create-release-${NEW_VERSION}
+	$(MAKE) create-release-version-${NEW_VERSION}
 
-create-release-v%:
-	$(eval VERSION := $(subst create-release-,,$@))
+create-release-version-v%:
+	$(eval VERSION := $(subst create-release-version-,,$@))
 	@echo "Releasing version ${VERSION}"
 	git tag -a ${VERSION} -m "Release ${VERSION}"
 	git push origin ${VERSION}
