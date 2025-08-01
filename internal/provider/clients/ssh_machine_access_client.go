@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"path/filepath"
-
 	"os"
+	"path/filepath"
+	"strings"
 
 	scp "github.com/bramvdbogaerde/go-scp"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -197,5 +197,71 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 		return fmt.Errorf("failed to set mode: %s", out)
 	}
 
+	// Ensure the file is readable by the SSH user for SCP access
+	// We need to add read permissions that allow SCP to access the file
+	// Add read permission for others to allow SCP access
+	_, err = client.RunCommand(ctx, "sudo chmod o+r "+path)
+	if err != nil {
+		// If this fails, it's not critical, but ReadFile via SCP might fail
+		tflog.Debug(ctx, "Warning: could not add read permission for SCP access: "+err.Error())
+	}
+
 	return nil
+}
+
+// ReadFile reads the content and metadata of a file from the remote machine using SCP
+func (client *sshMachineAccessClient) ReadFile(ctx context.Context, path string) (FileInfo, error) {
+	tflog.Debug(ctx, "Reading file from remote host using SCP: "+path)
+
+	scpClient, err := scp.NewClientBySSH(client.Client)
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("error creating SCP client: %w", err)
+	}
+	defer scpClient.Close()
+
+	// Create a temporary file to store the downloaded content
+	tmpFile, err := os.CreateTemp("", "readfile_*")
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	tflog.Debug(ctx, "Copying file from remote host to temp file: "+tmpFile.Name())
+
+	// Copy file from remote host to local temp file
+	err = scpClient.CopyFromRemote(ctx, tmpFile, path)
+	if err != nil {
+		// Check if it's a "No such file or directory" error
+		if strings.Contains(err.Error(), "No such file or directory") {
+			return FileInfo{}, FileNotFoundError{Path: path}
+		}
+		return FileInfo{}, fmt.Errorf("failed to copy file %s from remote host: %w", path, err)
+	}
+
+	// Read the content from the temp file
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("failed to read temp file: %w", err)
+	}
+
+	// Get file metadata using stat command
+	statOutput, err := client.RunCommand(ctx, fmt.Sprintf("stat -c '%%a %%U %%G' %s", path))
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("failed to get file metadata: %w", err)
+	}
+
+	// Parse the stat output (mode owner group)
+	parts := strings.Fields(strings.TrimSpace(statOutput))
+	if len(parts) != 3 {
+		return FileInfo{}, fmt.Errorf("unexpected stat output format: got %d parts, expected 3: %s", len(parts), statOutput)
+	}
+
+	tflog.Debug(ctx, "Successfully read file using SCP with metadata")
+	return FileInfo{
+		Content: string(content),
+		Mode:    parts[0],
+		Owner:   parts[1],
+		Group:   parts[2],
+	}, nil
 }
