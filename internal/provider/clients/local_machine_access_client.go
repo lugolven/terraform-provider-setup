@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -70,4 +71,43 @@ func (client *localMachineAccessClient) WriteFile(ctx context.Context, path stri
 	}
 
 	return nil
+}
+
+// ReadFile reads the content and metadata of a file from the local machine
+func (client *localMachineAccessClient) ReadFile(ctx context.Context, path string) (FileInfo, error) {
+	tflog.Debug(ctx, "Reading file from local machine: "+path)
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		// Check if it's a "no such file or directory" error
+		if os.IsNotExist(err) {
+			return FileInfo{}, FileNotFoundError{Path: path}
+		}
+		return FileInfo{}, fmt.Errorf("failed to read file %s: %w", path, err)
+	}
+
+	// Get file metadata
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("failed to get file metadata: %w", err)
+	}
+
+	// Get file mode
+	mode := fmt.Sprintf("%04o", fileInfo.Mode().Perm())
+
+	// Get owner and group using stat syscall
+	owner, group := "0", "0"
+	if stat, ok := fileInfo.Sys().(*syscall.Stat_t); ok {
+		owner = fmt.Sprintf("%d", stat.Uid)
+		group = fmt.Sprintf("%d", stat.Gid)
+	} else {
+		return FileInfo{}, fmt.Errorf("failed to get file owner/group information")
+	}
+
+	return FileInfo{
+		Content: string(content),
+		Mode:    mode,
+		Owner:   owner,
+		Group:   group,
+	}, nil
 }

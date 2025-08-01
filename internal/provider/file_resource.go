@@ -113,13 +113,13 @@ func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	// read the file content
-	content, err := file.provider.machineAccessClient.RunCommand(ctx, "sudo cat "+model.Path.String())
+	fileInfo, err := file.provider.machineAccessClient.ReadFile(ctx, model.Path.String())
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to read file", err.Error())
 		return
 	}
 
-	model.Content = types.StringValue(content)
+	model.Content = types.StringValue(fileInfo.Content)
 
 	// get the file stat
 	stat, err := file.provider.machineAccessClient.RunCommand(ctx, "sudo stat -c '%u %g %a' "+model.Path.String())

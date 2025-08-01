@@ -10,20 +10,34 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TesLocalRunCommand(t *testing.T) {
+func TestLocalRunCommand(t *testing.T) {
+	// Arrange
 	client, err := CreateLocalMachineAccessClient()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("successful command execution", func(t *testing.T) {
-		output, err := client.RunCommand(t.Context(), "echo hello")
+		// Arrange
+		expectedOutput := "hello\n"
+		command := "echo hello"
+
+		// Act
+		output, err := client.RunCommand(t.Context(), command)
+
+		// Assert
 		assert.NoError(t, err)
-		assert.Equal(t, "hello\n", output)
+		assert.Equal(t, expectedOutput, output)
 	})
 
 	t.Run("failed command execution", func(t *testing.T) {
-		_, err := client.RunCommand(t.Context(), "invalidcommand")
+		// Arrange
+		invalidCommand := "invalidcommand"
+
+		// Act
+		_, err := client.RunCommand(t.Context(), invalidCommand)
+
+		// Assert
 		assert.Error(t, err)
 	})
 }
