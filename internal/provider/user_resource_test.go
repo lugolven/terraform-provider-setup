@@ -1,14 +1,12 @@
 package provider
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"strings"
 	"terraform-provider-setup/internal/provider/clients"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -16,42 +14,24 @@ import (
 func TestUserResource(t *testing.T) {
 	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
-
+		setup := setupTestEnvironment(t)
 		var firstUserGid string
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfig("testuser", "testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("testuser", "testgroup"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /etc/passwd")
+							content, err := sshClient.RunCommand(context.Background(), "cat /etc/passwd")
 							if err != nil {
 								return err
 							}
@@ -75,16 +55,16 @@ func TestUserResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfig("anotheruser", "testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("anotheruser", "testgroup"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_user.user", "name", "anotheruser"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /etc/passwd")
+							content, err := sshClient.RunCommand(context.Background(), "cat /etc/passwd")
 							if err != nil {
 								return err
 							}
@@ -117,40 +97,23 @@ func TestUserResource(t *testing.T) {
 
 	t.Run("Test with user already created", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfig("testuser", "testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("testuser", "testgroup"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /etc/passwd")
+							content, err := sshClient.RunCommand(context.Background(), "cat /etc/passwd")
 							if err != nil {
 								return err
 							}
@@ -169,43 +132,23 @@ func TestUserResource(t *testing.T) {
 
 	t.Run("Test removing user from group", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
-
-		// Create the groups first
-		// sshClient is no longer needed since we removed manual groupadd commands
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfigWithGroups("testuser", []string{"testgroup", "othergroup"}),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfigWithGroups("testuser", []string{"testgroup", "othergroup"}),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "groups testuser")
+							content, err := sshClient.RunCommand(context.Background(), "groups testuser")
 							if err != nil {
 								return err
 							}
@@ -219,16 +162,16 @@ func TestUserResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testUserResourceConfigWithGroups("testuser", []string{"testgroup"}),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfigWithGroups("testuser", []string{"testgroup"}),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "groups testuser")
+							content, err := sshClient.RunCommand(context.Background(), "groups testuser")
 							if err != nil {
 								return err
 							}

@@ -1,14 +1,13 @@
 package provider
 
 import (
+	"context"
 	"fmt"
-	"os"
+	"regexp"
 	"strings"
 	"terraform-provider-setup/internal/provider/clients"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -16,31 +15,14 @@ import (
 func TestAptPackagesResource(t *testing.T) {
 	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testAptPackagesResourceConfig([]struct {
+					Config: testProviderConfig(setup, "test", "localhost") + testAptPackagesResourceConfig([]struct {
 						name   string
 						absent bool
 					}{
@@ -60,12 +42,12 @@ func TestAptPackagesResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.absent", "true"),
 
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							allPackages, err := sshClient.RunCommand(t.Context(), "dpkg -l")
+							allPackages, err := sshClient.RunCommand(context.Background(), "dpkg -l")
 							if err != nil {
 								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
 							}
@@ -83,7 +65,7 @@ func TestAptPackagesResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testAptPackagesResourceConfig([]struct {
+					Config: testProviderConfig(setup, "test", "localhost") + testAptPackagesResourceConfig([]struct {
 						name   string
 						absent bool
 					}{
@@ -97,12 +79,12 @@ func TestAptPackagesResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.absent", "true"),
 
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							allPackages, err := sshClient.RunCommand(t.Context(), "dpkg -l")
+							allPackages, err := sshClient.RunCommand(context.Background(), "dpkg -l")
 							if err != nil {
 								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
 							}
@@ -121,7 +103,7 @@ func TestAptPackagesResource(t *testing.T) {
 				},
 
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testAptPackagesResourceConfig([]struct {
+					Config: testProviderConfig(setup, "test", "localhost") + testAptPackagesResourceConfig([]struct {
 						name   string
 						absent bool
 					}{
@@ -147,12 +129,12 @@ func TestAptPackagesResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.2.absent", "false"),
 
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							allPackages, err := sshClient.RunCommand(t.Context(), "dpkg -l")
+							allPackages, err := sshClient.RunCommand(context.Background(), "dpkg -l")
 							if err != nil {
 								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
 							}
@@ -167,6 +149,76 @@ func TestAptPackagesResource(t *testing.T) {
 
 							if !strings.Contains(allPackages, "nmap") {
 								return fmt.Errorf("package nmap not found")
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
+
+	t.Run("Test package does not exist", func(t *testing.T) {
+		// Arrange
+		setup := setupTestEnvironment(t)
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testAptPackagesResourceConfig([]struct {
+						name   string
+						absent bool
+					}{
+						{
+							name:   "nonexistent-package-xyz123",
+							absent: false,
+						},
+					}),
+					ExpectError: func() *regexp.Regexp {
+						return regexp.MustCompile(".*Unable to locate package.*|.*Package.*not found.*|.*No such package.*")
+					}(),
+				},
+			},
+		})
+	})
+
+	t.Run("Test remove non-existent package", func(t *testing.T) {
+		// Arrange
+		setup := setupTestEnvironment(t)
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testAptPackagesResourceConfig([]struct {
+						name   string
+						absent bool
+					}{
+						{
+							name:   "another-nonexistent-package-abc456",
+							absent: true,
+						},
+					}),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.name", "another-nonexistent-package-abc456"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.absent", "true"),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return err
+							}
+
+							allPackages, err := sshClient.RunCommand(context.Background(), "dpkg -l")
+							if err != nil {
+								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
+							}
+
+							if strings.Contains(allPackages, "another-nonexistent-package-abc456") {
+								return fmt.Errorf("package another-nonexistent-package-abc456 should not be found")
 							}
 
 							return nil

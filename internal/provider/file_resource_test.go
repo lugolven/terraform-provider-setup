@@ -1,13 +1,11 @@
 package provider
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"terraform-provider-setup/internal/provider/clients"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -19,31 +17,14 @@ func TestFileResource(t *testing.T) {
 
 	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
@@ -51,12 +32,12 @@ func TestFileResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "content", expectedContent),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -65,7 +46,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -79,7 +60,7 @@ func TestFileResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "world hello"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "world hello"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
@@ -87,12 +68,12 @@ func TestFileResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "content", "world hello\n"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -101,7 +82,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -115,16 +96,16 @@ func TestFileResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)),
+					Config: testProviderConfig(setup, "test", "localhost"),
 					Check: resource.ComposeTestCheckFunc(
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
 							// check that the file was deleted
-							out, err := sshClient.RunCommand(t.Context(), "ls /tmp/test.txt")
+							out, err := sshClient.RunCommand(context.Background(), "ls /tmp/test.txt")
 							if err == nil {
 								return fmt.Errorf("file was not deleted")
 							}
@@ -143,31 +124,14 @@ func TestFileResource(t *testing.T) {
 
 	t.Run("Test create, external change and update", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
@@ -175,12 +139,12 @@ func TestFileResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "content", expectedContent),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -189,7 +153,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -204,17 +168,17 @@ func TestFileResource(t *testing.T) {
 				},
 				{
 					PreConfig: func() {
-						sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+						sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 						if err != nil {
 							t.Fatal(err)
 						}
 
-						out, err := sshClient.RunCommand(t.Context(), "sudo sh -c \"echo 'world hello' > /tmp/test.txt\"")
+						out, err := sshClient.RunCommand(context.Background(), "sudo sh -c \"echo 'world hello' > /tmp/test.txt\"")
 						if err != nil {
 							t.Fatalf("failed to update file: %s\n %v", out, err)
 						}
 					},
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
@@ -222,12 +186,12 @@ func TestFileResource(t *testing.T) {
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "content", expectedContent),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(t.Context(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
 							if err != nil {
 								return err
 							}
@@ -236,7 +200,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
 							if err != nil {
 								return err
 							}
