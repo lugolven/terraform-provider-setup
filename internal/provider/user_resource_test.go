@@ -15,6 +15,7 @@ func TestUserResource(t *testing.T) {
 	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Arrange
 		setup := setupTestEnvironment(t)
+
 		var firstUserGid string
 
 		// Act & assert

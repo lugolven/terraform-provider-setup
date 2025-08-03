@@ -60,7 +60,7 @@ func (aptRepository *aptRepositoryResource) Schema(_ context.Context, _ resource
 	}
 }
 
-func (aptRepository *aptRepositoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (aptRepository *aptRepositoryResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -71,6 +71,7 @@ func (aptRepository *aptRepositoryResource) Configure(ctx context.Context, req r
 			"Unexpected Resource Configure Type",
 			"Expected *internalProvider, got: %T. Please report this issue to the provider developers.",
 		)
+
 		return
 	}
 
@@ -153,6 +154,7 @@ func (aptRepository *aptRepositoryResource) Read(ctx context.Context, req resour
 	// Check if the repository key file exists
 	keyPath := "/etc/apt/keyrings/" + state.Name.ValueString() + ".asc"
 	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "test -f "+keyPath)
+
 	if err != nil {
 		// Key file doesn't exist, remove from state
 		resp.State.RemoveResource(ctx)
@@ -162,6 +164,7 @@ func (aptRepository *aptRepositoryResource) Read(ctx context.Context, req resour
 	// Check if the repository source list exists
 	sourceListPath := "/etc/apt/sources.list.d/" + state.Name.ValueString() + ".list"
 	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "test -f "+sourceListPath)
+
 	if err != nil {
 		// Source list doesn't exist, remove from state
 		resp.State.RemoveResource(ctx)
@@ -195,6 +198,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		// Remove old key file
 		oldKeyPath := "/etc/apt/keyrings/" + state.Name.ValueString() + ".asc"
 		_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+oldKeyPath)
+
 		if err != nil {
 			resp.Diagnostics.AddWarning("Failed to remove old key file", err.Error())
 		}
@@ -202,6 +206,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		// Remove old source list
 		oldSourceListPath := "/etc/apt/sources.list.d/" + state.Name.ValueString() + ".list"
 		_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+oldSourceListPath)
+
 		if err != nil {
 			resp.Diagnostics.AddWarning("Failed to remove old source list", err.Error())
 		}
@@ -220,6 +225,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		resp.Diagnostics.AddError("Failed to get system architecture", err.Error())
 		return
 	}
+
 	arch := strings.Replace(string(archResponse), "\n", "", -1)
 
 	flavorResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
@@ -227,6 +233,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		resp.Diagnostics.AddError("Failed to get system flavor", err.Error())
 		return
 	}
+
 	flavor := strings.Replace(string(flavorResponse), "\n", "", -1)
 
 	// Update the repository source list
@@ -252,6 +259,7 @@ func (aptRepository *aptRepositoryResource) Delete(ctx context.Context, req reso
 	// Remove the key file
 	keyPath := "/etc/apt/keyrings/" + state.Name.ValueString() + ".asc"
 	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+keyPath)
+
 	if err != nil {
 		resp.Diagnostics.AddWarning("Failed to remove key file", err.Error())
 	}
@@ -259,6 +267,7 @@ func (aptRepository *aptRepositoryResource) Delete(ctx context.Context, req reso
 	// Remove the source list file
 	sourceListPath := "/etc/apt/sources.list.d/" + state.Name.ValueString() + ".list"
 	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+sourceListPath)
+
 	if err != nil {
 		resp.Diagnostics.AddWarning("Failed to remove source list file", err.Error())
 	}

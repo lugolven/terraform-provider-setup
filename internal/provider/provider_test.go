@@ -26,9 +26,10 @@ func setupTestEnvironment(t *testing.T) *TestSetup {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	keyPath := keyFile.Name()
 	keyFile.Close()
-	
+
 	// Clean up key files when test finishes
 	t.Cleanup(func() {
 		os.Remove(keyPath)
@@ -45,7 +46,7 @@ func setupTestEnvironment(t *testing.T) *TestSetup {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	// Clean up server when test finishes
 	t.Cleanup(stopServer)
 
@@ -69,6 +70,7 @@ func testProviderConfig(args ...interface{}) string {
 		if setup, ok := args[0].(*TestSetup); ok {
 			user := args[1].(string)
 			host := args[2].(string)
+
 			return fmt.Sprintf(`
 	provider "setup" {
 		private_key = "%s"
@@ -86,6 +88,7 @@ func testProviderConfig(args ...interface{}) string {
 		user := args[1].(string)
 		host := args[2].(string)
 		port := args[3].(string)
+
 		return fmt.Sprintf(`
 	provider "setup" {
 		private_key = "%s"
