@@ -1,13 +1,11 @@
 package provider
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"terraform-provider-setup/internal/provider/clients"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -17,43 +15,26 @@ func TestDirectoryResource(t *testing.T) {
 
 	t.Run("Test create and delete", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0),
+					Config: testProviderConfig(setup, "test", "localhost") + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_directory.dir", "path", "/tmp/testdir"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "mode", "755"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "group", "0"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/testdir")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/testdir")
 							if err != nil {
 								return err
 							}
@@ -67,16 +48,16 @@ func TestDirectoryResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)),
+					Config: testProviderConfig(setup, "test", "localhost"),
 					Check: resource.ComposeTestCheckFunc(
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
 							// check that the directory was deleted
-							out, err := sshClient.RunCommand(t.Context(), "ls /tmp/testdir")
+							out, err := sshClient.RunCommand(context.Background(), "ls /tmp/testdir")
 							if err == nil {
 								return fmt.Errorf("directory was not deleted")
 							}
@@ -95,43 +76,26 @@ func TestDirectoryResource(t *testing.T) {
 
 	t.Run("Test create, external change and update", func(t *testing.T) {
 		// Arrange
-		keyPath, err := os.CreateTemp("", "key")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name())
-
-		if err := clients.CreateSSHKey(t, keyPath.Name()); err != nil {
-			t.Fatal(err)
-		}
-		defer os.Remove(keyPath.Name() + ".pub")
-
-		port, stopServer, err := clients.StartDockerSSHServer(t, keyPath.Name()+".pub", keyPath.Name())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer stopServer()
+		setup := setupTestEnvironment(t)
 
 		// Act & assert
 		resource.Test(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"setup": providerserver.NewProtocol6WithError(NewProvider()()),
-			},
+			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0),
+					Config: testProviderConfig(setup, "test", "localhost") + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_directory.dir", "path", "/tmp/testdir"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "mode", "755"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "group", "0"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/testdir")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/testdir")
 							if err != nil {
 								return err
 							}
@@ -146,29 +110,29 @@ func TestDirectoryResource(t *testing.T) {
 				},
 				{
 					PreConfig: func() {
-						sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+						sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 						if err != nil {
 							t.Fatal(err)
 						}
 
-						out, err := sshClient.RunCommand(t.Context(), "sudo chmod 777 /tmp/testdir")
+						out, err := sshClient.RunCommand(context.Background(), "sudo chmod 777 /tmp/testdir")
 						if err != nil {
 							t.Fatalf("failed to update directory permissions: %s\n %v", out, err)
 						}
 					},
-					Config: testProviderConfig(keyPath.Name(), "test", "localhost", fmt.Sprintf("%d", port)) + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0),
+					Config: testProviderConfig(setup, "test", "localhost") + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_directory.dir", "path", "/tmp/testdir"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "mode", "755"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "group", "0"),
 						func(_ *terraform.State) error {
-							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithPrivateKeyPath(keyPath.Name()).Build(t.Context())
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							stat, err := sshClient.RunCommand(t.Context(), "stat -c '%U %G %a' /tmp/testdir")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/testdir")
 							if err != nil {
 								return err
 							}
