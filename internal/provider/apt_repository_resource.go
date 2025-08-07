@@ -134,6 +134,20 @@ func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req reso
 		return
 	}
 
+	// 6. Update apt package cache to ensure the repository is accessible
+	updateOutput, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo apt update")
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to update apt package cache after adding repository", "This usually means the repository URL is invalid, the GPG key is incorrect, or the repository doesn't support your system architecture/distribution.\n\nRepository: "+plan.URL.ValueString()+" "+flavor+"\nArchitecture: "+arch+"\n\nError: "+err.Error()+"\n\nOutput: "+string(updateOutput))
+		return
+	}
+
+	// 7. Check for any repository-related errors in the update output
+	updateOutputStr := string(updateOutput)
+	if strings.Contains(updateOutputStr, "Failed to fetch") || strings.Contains(updateOutputStr, "NO_PUBKEY") || strings.Contains(updateOutputStr, "KEYEXPIRED") {
+		resp.Diagnostics.AddError("Repository validation failed", "The repository was added but apt update shows errors:\n\n"+updateOutputStr)
+		return
+	}
+
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 
