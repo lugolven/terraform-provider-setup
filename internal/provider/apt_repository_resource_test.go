@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"terraform-provider-setup/internal/provider/clients"
 	"testing"
 
@@ -260,6 +261,55 @@ LVJ6aPO4EkqZ5qUY/xj7kV8f4gJ0VJVa7wQQJKy4VJ9qSj3j7+cK
 							return nil
 						},
 					),
+				},
+			},
+		})
+	})
+
+	t.Run("Test repository validation - invalid URL should fail", func(t *testing.T) {
+		// Arrange
+		setup := setupTestEnvironment(t)
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfig("invalid-repo", dockerGpgKey, "https://invalid-repository-url.example.com/linux/debian"),
+					ExpectError: regexp.MustCompile("Failed to update apt package cache after adding repository|Repository validation failed"),
+				},
+			},
+		})
+	})
+
+	t.Run("Test repository validation - Ubuntu URL on Debian should fail", func(t *testing.T) {
+		// Arrange  
+		setup := setupTestEnvironment(t)
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfig("ubuntu-on-debian", dockerGpgKey, "https://download.docker.com/linux/ubuntu"),
+					ExpectError: regexp.MustCompile("Failed to update apt package cache after adding repository|Repository validation failed|Failed to fetch"),
+				},
+			},
+		})
+	})
+
+	t.Run("Test repository validation - malformed GPG key should fail", func(t *testing.T) {
+		// Arrange
+		setup := setupTestEnvironment(t)
+		invalidGpgKey := "-----BEGIN PGP PUBLIC KEY BLOCK-----\ninvalid key content\n-----END PGP PUBLIC KEY BLOCK-----"
+
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfig("invalid-key", invalidGpgKey, "https://download.docker.com/linux/debian"),
+					ExpectError: regexp.MustCompile("Failed to update apt package cache after adding repository|Repository validation failed|NO_PUBKEY"),
 				},
 			},
 		})
