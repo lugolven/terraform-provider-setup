@@ -23,7 +23,7 @@ func TestAptRepositoryResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "docker", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "docker", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_apt_repository.repo", "name", "docker"),
 						resource.TestCheckResourceAttrSet("setup_apt_repository.repo", "key"),
@@ -61,7 +61,7 @@ func TestAptRepositoryResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "docker", "https://download.docker.com/linux/debian", "https://download.docker.com/linux/debian/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "docker", "https://download.docker.com/linux/debian", "https://download.docker.com/linux/debian/gpg"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_apt_repository.repo", "name", "docker"),
 						resource.TestCheckResourceAttrSet("setup_apt_repository.repo", "key"),
@@ -124,7 +124,7 @@ func TestAptRepositoryResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "old-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "old-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_apt_repository.repo", "name", "old-repo"),
 						func(_ *terraform.State) error {
@@ -149,7 +149,7 @@ func TestAptRepositoryResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "new-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "new-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_apt_repository.repo", "name", "new-repo"),
 						func(_ *terraform.State) error {
@@ -197,7 +197,7 @@ func TestAptRepositoryResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "test-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "test-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_apt_repository.repo", "name", "test-repo"),
 					),
@@ -215,7 +215,7 @@ func TestAptRepositoryResource(t *testing.T) {
 							t.Fatalf("failed to remove key file: %v", err)
 						}
 					},
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "test-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "test-repo", "https://download.docker.com/linux/ubuntu", "https://download.docker.com/linux/ubuntu/gpg"),
 					Check: resource.ComposeTestCheckFunc(
 						resource.TestCheckResourceAttr("setup_apt_repository.repo", "name", "test-repo"),
 						func(_ *terraform.State) error {
@@ -247,7 +247,7 @@ func TestAptRepositoryResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "invalid-repo", "https://invalid-repository-url.example.com/linux/debian", "https://download.docker.com/linux/debian/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "invalid-repo", "https://invalid-repository-url.example.com/linux/debian", "https://download.docker.com/linux/debian/gpg"),
 					ExpectError: regexp.MustCompile("Failed to update apt package cache after adding repository|Repository validation failed"),
 				},
 			},
@@ -263,7 +263,7 @@ func TestAptRepositoryResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHttpKey(t, "debian-on-ubuntu", "https://download.docker.com/linux/debian", "https://download.docker.com/linux/debian/gpg"),
+					Config: testProviderConfig(setup, "test", "localhost") + testAptRepositoryResourceConfigWithHTTPKey(t, "debian-on-ubuntu", "https://download.docker.com/linux/debian", "https://download.docker.com/linux/debian/gpg"),
 					ExpectError: regexp.MustCompile("Failed to update apt package cache after adding repository|Repository validation failed|Failed to fetch"),
 				},
 			},
@@ -288,18 +288,19 @@ func TestAptRepositoryResource(t *testing.T) {
 	})
 }
 
-func testAptRepositoryResourceConfigWithHttpKey(t *testing.T, name string, url string, keyUrl string) string {
+func testAptRepositoryResourceConfigWithHTTPKey(t *testing.T, name string, url string, keyURL string) string {
 	t.Helper()
 	
 	// Fetch GPG key via HTTP
-	resp, err := http.Get(keyUrl)
+	// #nosec G107 - This is a test function using trusted test URLs
+	resp, err := http.Get(keyURL)
 	if err != nil {
-		t.Fatalf("Failed to fetch GPG key from %s: %v", keyUrl, err)
+		t.Fatalf("Failed to fetch GPG key from %s: %v", keyURL, err)
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("HTTP request failed with status %d for URL %s", resp.StatusCode, keyUrl)
+		t.Fatalf("HTTP request failed with status %d for URL %s", resp.StatusCode, keyURL)
 	}
 	
 	body, err := io.ReadAll(resp.Body)
