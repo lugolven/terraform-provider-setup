@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 
@@ -67,6 +68,29 @@ func (client *localMachineAccessClient) WriteFile(ctx context.Context, path stri
 	_, err = client.RunCommand(ctx, "chmod "+mode+" "+path)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (client *localMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
+	tflog.Debug(ctx, fmt.Sprintf("Copying file from %s to %s", localPath, remotePath))
+
+	srcFile, err := os.Open(localPath) // #nosec G304
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %w", localPath, err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(remotePath) // #nosec G304
+	if err != nil {
+		return fmt.Errorf("failed to create destination file %s: %w", remotePath, err)
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file content: %w", err)
 	}
 
 	return nil

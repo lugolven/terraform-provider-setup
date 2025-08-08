@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,7 +38,7 @@ func TestDockerImageLoadResource(t *testing.T) {
 				{
 					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + testDockerImageLoadResourceConfig(tarFile),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", "/tmp/test-image.tar"),
+						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", tarFile),
 						resource.TestCheckResourceAttrSet("setup_docker_image_load.test", "image_sha"),
 						func(s *terraform.State) error {
 							rs, ok := s.RootModule().Resources["setup_docker_image_load.test"]
@@ -96,14 +95,14 @@ func TestDockerImageLoadResource(t *testing.T) {
 				{
 					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + testDockerImageLoadResourceConfig(tarFile1),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", "/tmp/test-image.tar"),
+						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", tarFile1),
 						resource.TestCheckResourceAttrSet("setup_docker_image_load.test", "image_sha"),
 					),
 				},
 				{
 					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + testDockerImageLoadResourceConfig(tarFile2),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", "/tmp/test-image.tar"),
+						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", tarFile2),
 						resource.TestCheckResourceAttrSet("setup_docker_image_load.test", "image_sha"),
 					),
 				},
@@ -154,31 +153,12 @@ resource "setup_apt_packages" "docker_packages" {
 }
 
 func testDockerImageLoadResourceConfig(tarFile string) string {
-	// Read the tar file content to embed it in the file resource
-	// #nosec G304 - This is a test function reading test files created by the test
-	content, err := os.ReadFile(tarFile)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to read tar file: %v", err))
-	}
-
-	// Base64 encode the binary content for embedding in Terraform config
-	encodedContent := base64.StdEncoding.EncodeToString(content)
-
 	return fmt.Sprintf(`
-resource "setup_file" "docker_tar" {
-  depends_on = [setup_apt_packages.docker_packages]
-  path = "/tmp/test-image.tar"
-  mode = "644"
-  owner = 0
-  group = 0
-  content = base64decode("%s")
-}
-
 resource "setup_docker_image_load" "test" {
-  depends_on = [setup_file.docker_tar]
-  tar_file = "/tmp/test-image.tar"
+  depends_on = [setup_apt_packages.docker_packages]
+  tar_file = "%s"
 }
-`, encodedContent)
+`, tarFile)
 }
 
 func createTestDockerImageTar(tarFile string) error {
