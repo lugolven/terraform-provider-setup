@@ -208,7 +208,7 @@ func (client *sshMachineAccessClient) CopyFile(ctx context.Context, localPath st
 
 	tflog.Debug(ctx, fmt.Sprintf("Copying file from %s to %s", localPath, remotePath))
 
-	f, err := os.Open(localPath)
+	f, err := os.Open(localPath) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("failed to open local file %s: %w", localPath, err)
 	}

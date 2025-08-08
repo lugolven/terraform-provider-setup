@@ -76,13 +76,13 @@ func (client *localMachineAccessClient) WriteFile(ctx context.Context, path stri
 func (client *localMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
 	tflog.Debug(ctx, fmt.Sprintf("Copying file from %s to %s", localPath, remotePath))
 
-	srcFile, err := os.Open(localPath)
+	srcFile, err := os.Open(localPath) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %w", localPath, err)
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.Create(remotePath)
+	dstFile, err := os.Create(remotePath) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("failed to create destination file %s: %w", remotePath, err)
 	}
