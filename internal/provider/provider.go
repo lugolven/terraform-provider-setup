@@ -117,6 +117,7 @@ func (p *internalProvider) Resources(_ context.Context) []func() resource.Resour
 		p.newFileResource,
 		p.newAptPackagesResource,
 		p.newAptRepositoryResource,
+		p.newDockerImageLoadResource,
 	}
 }
 
@@ -142,4 +143,8 @@ func (p *internalProvider) newAptPackagesResource() resource.Resource {
 }
 func (p *internalProvider) newAptRepositoryResource() resource.Resource {
 	return newAptRepositoryResource(p)
+}
+
+func (p *internalProvider) newDockerImageLoadResource() resource.Resource {
+	return newDockerImageLoadResource(p)
 }
