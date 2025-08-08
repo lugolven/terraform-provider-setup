@@ -199,3 +199,25 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 
 	return nil
 }
+
+func (client *sshMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
+	scpClient, err := scp.NewClientBySSH(client.Client)
+	if err != nil {
+		return fmt.Errorf("error creating new SSH session from existing connection: %w", err)
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("Copying file from %s to %s", localPath, remotePath))
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to open local file %s: %w", localPath, err)
+	}
+	defer f.Close()
+
+	err = scpClient.CopyFromFile(ctx, *f, remotePath, "0644")
+	if err != nil {
+		return fmt.Errorf("failed to copy file to remote host: %w", err)
+	}
+
+	return nil
+}

@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"os"
+	filepath_pkg "path/filepath"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -64,16 +66,33 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 
 	tarFilePath := strings.Trim(plan.TarFile.ValueString(), `"`)
 
-	// Check if file exists via SSH connection (for remote files) or locally
-	_, err := d.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("test -f %s", tarFilePath))
-	if err != nil {
-		resp.Diagnostics.AddError("Tar file not found", fmt.Sprintf("The specified tar file does not exist: %s", tarFilePath))
+	// Check if local tar file exists
+	if _, err := os.Stat(tarFilePath); err != nil {
+		resp.Diagnostics.AddError("Local tar file not found", fmt.Sprintf("The specified local tar file does not exist: %s", tarFilePath))
 		return
 	}
 
-	absPath := tarFilePath
+	// Generate a temporary file path on the remote machine
+	remoteTmpPath := fmt.Sprintf("/tmp/docker_load_%s_%s",
+		filepath_pkg.Base(tarFilePath),
+		strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%p", &plan), "0x", ""), "&", ""))
 
-	loadCmd := fmt.Sprintf("sudo docker load -i %s 2>&1", absPath)
+	// Copy local tar file to remote temporary location
+	err := d.provider.machineAccessClient.CopyFile(ctx, tarFilePath, remoteTmpPath)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to copy tar file to remote machine", fmt.Sprintf("Error: %v", err))
+		return
+	}
+
+	// Ensure cleanup happens even if docker load fails
+	defer func() {
+		cleanupCmd := fmt.Sprintf("rm -f %s", remoteTmpPath)
+		if _, cleanupErr := d.provider.machineAccessClient.RunCommand(ctx, cleanupCmd); cleanupErr != nil {
+			resp.Diagnostics.AddWarning("Failed to cleanup temporary file", fmt.Sprintf("Could not remove temporary file %s: %v", remoteTmpPath, cleanupErr))
+		}
+	}()
+
+	loadCmd := fmt.Sprintf("sudo docker load -i %s 2>&1", remoteTmpPath)
 	output, err := d.provider.machineAccessClient.RunCommand(ctx, loadCmd)
 
 	if err != nil {
@@ -153,16 +172,33 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 
 		tarFilePath := strings.Trim(plan.TarFile.ValueString(), `"`)
 
-		// Check if file exists via SSH connection (for remote files) or locally
-		_, err := d.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("test -f %s", tarFilePath))
-		if err != nil {
-			resp.Diagnostics.AddError("Tar file not found", fmt.Sprintf("The specified tar file does not exist: %s", tarFilePath))
+		// Check if local tar file exists
+		if _, err := os.Stat(tarFilePath); err != nil {
+			resp.Diagnostics.AddError("Local tar file not found", fmt.Sprintf("The specified local tar file does not exist: %s", tarFilePath))
 			return
 		}
 
-		absPath := tarFilePath
+		// Generate a temporary file path on the remote machine
+		remoteTmpPath := fmt.Sprintf("/tmp/docker_load_%s_%s",
+			filepath_pkg.Base(tarFilePath),
+			strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%p", &plan), "0x", ""), "&", ""))
 
-		loadCmd := fmt.Sprintf("sudo docker load -i %s 2>&1", absPath)
+		// Copy local tar file to remote temporary location
+		err := d.provider.machineAccessClient.CopyFile(ctx, tarFilePath, remoteTmpPath)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to copy tar file to remote machine", fmt.Sprintf("Error: %v", err))
+			return
+		}
+
+		// Ensure cleanup happens even if docker load fails
+		defer func() {
+			cleanupCmd := fmt.Sprintf("rm -f %s", remoteTmpPath)
+			if _, cleanupErr := d.provider.machineAccessClient.RunCommand(ctx, cleanupCmd); cleanupErr != nil {
+				resp.Diagnostics.AddWarning("Failed to cleanup temporary file", fmt.Sprintf("Could not remove temporary file %s: %v", remoteTmpPath, cleanupErr))
+			}
+		}()
+
+		loadCmd := fmt.Sprintf("sudo docker load -i %s 2>&1", remoteTmpPath)
 		output, err := d.provider.machineAccessClient.RunCommand(ctx, loadCmd)
 
 		if err != nil {
