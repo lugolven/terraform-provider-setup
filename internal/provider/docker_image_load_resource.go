@@ -81,9 +81,7 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-
 	imageSHA, err := d.getImageSHAAfterLoad(ctx, output)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get image SHA", fmt.Sprintf("Output: %s, Error: %v", output, err))
 		return
@@ -224,10 +222,12 @@ func (d *dockerImageLoadResource) getImageSHAAfterLoad(ctx context.Context, load
 	// Get the actual SHA256 by inspecting the image
 	inspectCmd := fmt.Sprintf("sudo docker inspect --format='{{.Id}}' %s", imageRef)
 	shaOutput, err := d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
+
 	if err != nil {
 		// Fallback: list recent images and get the most recent one
 		listCmd := "sudo docker images --no-trunc --format '{{.ID}}' | head -1"
 		shaOutput, err = d.provider.machineAccessClient.RunCommand(ctx, listCmd)
+
 		if err != nil {
 			return "", fmt.Errorf("failed to get image SHA: %v", err)
 		}

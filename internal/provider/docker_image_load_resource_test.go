@@ -155,14 +155,15 @@ resource "setup_apt_packages" "docker_packages" {
 
 func testDockerImageLoadResourceConfig(tarFile string) string {
 	// Read the tar file content to embed it in the file resource
+	// #nosec G304 - This is a test function reading test files created by the test
 	content, err := os.ReadFile(tarFile)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read tar file: %v", err))
 	}
-	
+
 	// Base64 encode the binary content for embedding in Terraform config
 	encodedContent := base64.StdEncoding.EncodeToString(content)
-	
+
 	return fmt.Sprintf(`
 resource "setup_file" "docker_tar" {
   depends_on = [setup_apt_packages.docker_packages]
@@ -201,7 +202,7 @@ func createTestDockerImageTar(tarFile string) error {
 	// Create a proper layer tar file first
 	var layerBuf bytes.Buffer
 	layerTarWriter := tar.NewWriter(&layerBuf)
-	
+
 	// Add a simple file to the layer
 	testFileHeader := &tar.Header{
 		Name: "test.txt",
@@ -211,9 +212,11 @@ func createTestDockerImageTar(tarFile string) error {
 	if err := layerTarWriter.WriteHeader(testFileHeader); err != nil {
 		return err
 	}
+
 	if _, err := layerTarWriter.Write([]byte("test")); err != nil {
 		return err
 	}
+
 	layerTarWriter.Close()
 
 	// Calculate the actual SHA256 of the layer
@@ -239,7 +242,7 @@ func createTestDockerImageTar(tarFile string) error {
 			}
 		]
 	}`, layerDiffID)
-	
+
 	// Add config after calculating diff_id
 	if err := addFileToTar(tarWriter, "test-config.json", []byte(config)); err != nil {
 		return err
