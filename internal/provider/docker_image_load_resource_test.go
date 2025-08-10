@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"terraform-provider-setup/internal/provider/clients"
 	"testing"
 
@@ -81,11 +82,11 @@ func TestDockerImageLoadResource(t *testing.T) {
 		tarFile1 := filepath.Join(tempDir, "test-image1.tar")
 		tarFile2 := filepath.Join(tempDir, "test-image2.tar")
 
-		if err := createTestDockerImageTar(tarFile1); err != nil {
+		if err := createTestDockerImageTarWithContent(tarFile1, "first image content"); err != nil {
 			t.Fatalf("Failed to create first test tar file: %v", err)
 		}
 
-		if err := createTestDockerImageTar(tarFile2); err != nil {
+		if err := createTestDockerImageTarWithContent(tarFile2, "second image content"); err != nil {
 			t.Fatalf("Failed to create second test tar file: %v", err)
 		}
 
@@ -108,6 +109,233 @@ func TestDockerImageLoadResource(t *testing.T) {
 				},
 			},
 		})
+	})
+
+	t.Run("Test tar file content change detection", func(t *testing.T) {
+		setup := setupTestEnvironment(t)
+
+		tempDir, err := os.MkdirTemp("", "docker-test")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		tarFile := filepath.Join(tempDir, "test-image.tar")
+
+		// Create initial tar with first content
+		if err := createTestDockerImageTarWithContent(tarFile, "initial content"); err != nil {
+			t.Fatalf("Failed to create initial test tar file: %v", err)
+		}
+
+		var initialImageSHA string
+
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + testDockerImageLoadResourceConfig(tarFile),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", tarFile),
+						resource.TestCheckResourceAttrSet("setup_docker_image_load.test", "image_sha"),
+						func(s *terraform.State) error {
+							rs, ok := s.RootModule().Resources["setup_docker_image_load.test"]
+							if !ok {
+								return fmt.Errorf("resource not found: setup_docker_image_load.test")
+							}
+							initialImageSHA = rs.Primary.Attributes["image_sha"]
+							return nil
+						},
+					),
+				},
+				{
+					PreConfig: func() {
+						// Replace tar file with different content but same path
+						if err := createTestDockerImageTarWithContent(tarFile, "updated content"); err != nil {
+							t.Fatalf("Failed to create updated test tar file: %v", err)
+						}
+					},
+					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + testDockerImageLoadResourceConfig(tarFile),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_docker_image_load.test", "tar_file", tarFile),
+						resource.TestCheckResourceAttrSet("setup_docker_image_load.test", "image_sha"),
+						func(s *terraform.State) error {
+							rs, ok := s.RootModule().Resources["setup_docker_image_load.test"]
+							if !ok {
+								return fmt.Errorf("resource not found: setup_docker_image_load.test")
+							}
+
+							newImageSHA := rs.Primary.Attributes["image_sha"]
+							if newImageSHA == initialImageSHA {
+								return fmt.Errorf("image SHA should have changed when tar content changed, but stayed: %s", newImageSHA)
+							}
+
+							// Verify the new image exists
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return err
+							}
+
+							_, err = sshClient.RunCommand(context.Background(), fmt.Sprintf("sudo docker inspect %s", newImageSHA))
+							if err != nil {
+								return fmt.Errorf("new docker image not found: %v", err)
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
+}
+
+func TestGetImageSHAFromLocalTar(t *testing.T) {
+	t.Run("should extract correct SHA from valid tar file", func(t *testing.T) {
+		// Arrange
+		tempDir, err := os.MkdirTemp("", "tar-inspect-test")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		tarFile := filepath.Join(tempDir, "test-image.tar")
+		if err := createTestDockerImageTarWithContent(tarFile, "test content"); err != nil {
+			t.Fatalf("Failed to create test tar file: %v", err)
+		}
+
+		resource := &dockerImageLoadResource{}
+
+		// Act
+		imageSHA, err := resource.getImageSHAFromLocalTar(tarFile)
+
+		// Assert
+		if err != nil {
+			t.Fatalf("Expected no error, got: %v", err)
+		}
+
+		if !strings.HasPrefix(imageSHA, "sha256:") {
+			t.Errorf("Expected SHA to start with 'sha256:', got: %s", imageSHA)
+		}
+
+		if len(imageSHA) != 71 {
+			t.Errorf("Expected SHA length to be 71, got: %d", len(imageSHA))
+		}
+	})
+
+	t.Run("should produce different SHAs for different content", func(t *testing.T) {
+		// Arrange
+		tempDir, err := os.MkdirTemp("", "tar-inspect-test")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		tarFile1 := filepath.Join(tempDir, "test-image1.tar")
+		tarFile2 := filepath.Join(tempDir, "test-image2.tar")
+
+		if err := createTestDockerImageTarWithContent(tarFile1, "first content"); err != nil {
+			t.Fatalf("Failed to create first test tar file: %v", err)
+		}
+
+		if err := createTestDockerImageTarWithContent(tarFile2, "second content"); err != nil {
+			t.Fatalf("Failed to create second test tar file: %v", err)
+		}
+
+		resource := &dockerImageLoadResource{}
+
+		// Act
+		imageSHA1, err1 := resource.getImageSHAFromLocalTar(tarFile1)
+		imageSHA2, err2 := resource.getImageSHAFromLocalTar(tarFile2)
+
+		// Assert
+		if err1 != nil {
+			t.Fatalf("Expected no error for first tar, got: %v", err1)
+		}
+
+		if err2 != nil {
+			t.Fatalf("Expected no error for second tar, got: %v", err2)
+		}
+
+		if imageSHA1 == imageSHA2 {
+			t.Errorf("Expected different SHAs for different content, but got same: %s", imageSHA1)
+		}
+	})
+
+	t.Run("should produce same SHA for same content", func(t *testing.T) {
+		// Arrange
+		tempDir, err := os.MkdirTemp("", "tar-inspect-test")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		tarFile1 := filepath.Join(tempDir, "test-image1.tar")
+		tarFile2 := filepath.Join(tempDir, "test-image2.tar")
+
+		content := "identical content"
+		if err := createTestDockerImageTarWithContent(tarFile1, content); err != nil {
+			t.Fatalf("Failed to create first test tar file: %v", err)
+		}
+
+		if err := createTestDockerImageTarWithContent(tarFile2, content); err != nil {
+			t.Fatalf("Failed to create second test tar file: %v", err)
+		}
+
+		resource := &dockerImageLoadResource{}
+
+		// Act
+		imageSHA1, err1 := resource.getImageSHAFromLocalTar(tarFile1)
+		imageSHA2, err2 := resource.getImageSHAFromLocalTar(tarFile2)
+
+		// Assert
+		if err1 != nil {
+			t.Fatalf("Expected no error for first tar, got: %v", err1)
+		}
+
+		if err2 != nil {
+			t.Fatalf("Expected no error for second tar, got: %v", err2)
+		}
+
+		if imageSHA1 != imageSHA2 {
+			t.Errorf("Expected same SHAs for identical content, but got different: %s vs %s", imageSHA1, imageSHA2)
+		}
+	})
+
+	t.Run("should return error for non-existent file", func(t *testing.T) {
+		// Arrange
+		resource := &dockerImageLoadResource{}
+
+		// Act
+		_, err := resource.getImageSHAFromLocalTar("/nonexistent/file.tar")
+
+		// Assert
+		if err == nil {
+			t.Error("Expected error for non-existent file, but got nil")
+		}
+	})
+
+	t.Run("should return error for invalid tar file", func(t *testing.T) {
+		// Arrange
+		tempDir, err := os.MkdirTemp("", "invalid-tar-test")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		invalidTarFile := filepath.Join(tempDir, "invalid.tar")
+		if err := os.WriteFile(invalidTarFile, []byte("not a tar file"), 0600); err != nil {
+			t.Fatalf("Failed to create invalid tar file: %v", err)
+		}
+
+		resource := &dockerImageLoadResource{}
+
+		// Act
+		_, err = resource.getImageSHAFromLocalTar(invalidTarFile)
+
+		// Assert
+		if err == nil {
+			t.Error("Expected error for invalid tar file, but got nil")
+		}
 	})
 }
 
@@ -162,6 +390,10 @@ resource "setup_docker_image_load" "test" {
 }
 
 func createTestDockerImageTar(tarFile string) error {
+	return createTestDockerImageTarWithContent(tarFile, "test content")
+}
+
+func createTestDockerImageTarWithContent(tarFile, content string) error {
 	cleanPath := filepath.Clean(tarFile)
 	file, err := os.Create(cleanPath)
 
@@ -174,10 +406,9 @@ func createTestDockerImageTar(tarFile string) error {
 	tarWriter := tar.NewWriter(file)
 	defer tarWriter.Close()
 
-	manifest := `[{"Config":"test-config.json","RepoTags":["test:latest"],"Layers":["test-layer.tar"]}]`
-	if err := addFileToTar(tarWriter, "manifest.json", []byte(manifest)); err != nil {
-		return err
-	}
+	// We'll create the manifest after computing the config filename
+	// Store tarWriter for later use
+	var configFileName string
 
 	// Create a proper layer tar file first
 	var layerBuf bytes.Buffer
@@ -186,14 +417,14 @@ func createTestDockerImageTar(tarFile string) error {
 	// Add a simple file to the layer
 	testFileHeader := &tar.Header{
 		Name: "test.txt",
-		Size: 4,
+		Size: int64(len(content)),
 		Mode: 0644,
 	}
 	if err := layerTarWriter.WriteHeader(testFileHeader); err != nil {
 		return err
 	}
 
-	if _, err := layerTarWriter.Write([]byte("test")); err != nil {
+	if _, err := layerTarWriter.Write([]byte(content)); err != nil {
 		return err
 	}
 
@@ -223,8 +454,20 @@ func createTestDockerImageTar(tarFile string) error {
 		]
 	}`, layerDiffID)
 
+	// Calculate the SHA256 of the config to use as the config filename
+	configBytes := []byte(config)
+	configHash := sha256.Sum256(configBytes)
+	configSHA := fmt.Sprintf("%x", configHash)
+	configFileName = fmt.Sprintf("%s.json", configSHA)
+
+	// Create and add manifest with the computed config filename
+	manifest := fmt.Sprintf(`[{"Config":"%s","RepoTags":["test:latest"],"Layers":["test-layer.tar"]}]`, configFileName)
+	if err := addFileToTar(tarWriter, "manifest.json", []byte(manifest)); err != nil {
+		return err
+	}
+
 	// Add config after calculating diff_id
-	if err := addFileToTar(tarWriter, "test-config.json", []byte(config)); err != nil {
+	if err := addFileToTar(tarWriter, configFileName, []byte(config)); err != nil {
 		return err
 	}
 

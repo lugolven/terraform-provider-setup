@@ -1,8 +1,11 @@
 package provider
 
 import (
+	"archive/tar"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	filepath_pkg "path/filepath"
 	"strings"
@@ -72,13 +75,21 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	// Get the expected image SHA from the tar file
+	expectedImageSHA, err := d.getImageSHAFromLocalTar(tarFilePath)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
+		return
+	}
+
 	// Generate a temporary file path on the remote machine
 	remoteTmpPath := fmt.Sprintf("/tmp/docker_load_%s_%s",
 		filepath_pkg.Base(tarFilePath),
 		strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%p", &plan), "0x", ""), "&", ""))
 
 	// Copy local tar file to remote temporary location
-	err := d.provider.machineAccessClient.CopyFile(ctx, tarFilePath, remoteTmpPath)
+	err = d.provider.machineAccessClient.CopyFile(ctx, tarFilePath, remoteTmpPath)
+
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to copy tar file to remote machine", fmt.Sprintf("Error: %v", err))
 		return
@@ -100,13 +111,16 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	imageSHA, err := d.getImageSHAAfterLoad(ctx, output)
+	// Verify the image was loaded successfully by checking if it exists
+	inspectCmd := fmt.Sprintf("sudo docker inspect %s", expectedImageSHA)
+	_, err = d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
+
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to get image SHA", fmt.Sprintf("Output: %s, Error: %v", output, err))
+		resp.Diagnostics.AddError("Failed to verify loaded Docker image", fmt.Sprintf("Expected image %s was not found after loading. Load output: %s, Error: %v", expectedImageSHA, output, err))
 		return
 	}
 
-	plan.ImageSHA = types.StringValue(imageSHA)
+	plan.ImageSHA = types.StringValue(expectedImageSHA)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -126,9 +140,32 @@ func (d *dockerImageLoadResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	imageSHA := state.ImageSHA.ValueString()
+	tarFilePath := strings.Trim(state.TarFile.ValueString(), `"`)
 
+	// Check if the tar file still exists and get its expected SHA
+	if _, err := os.Stat(tarFilePath); err != nil {
+		// Tar file no longer exists, remove the resource
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	expectedImageSHA, err := d.getImageSHAFromLocalTar(tarFilePath)
+	if err != nil {
+		// Can't read the tar file, treat as if resource should be removed
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	// If the expected SHA differs from current state, the tar content has changed
+	// and we need to trigger an update by removing the resource so it gets recreated
+	if expectedImageSHA != imageSHA {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	// Check if the image still exists on the remote machine
 	inspectCmd := fmt.Sprintf("sudo docker inspect %s", imageSHA)
-	_, err := d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
+	_, err = d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
 
 	if err != nil {
 		resp.State.RemoveResource(ctx)
@@ -160,7 +197,17 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if !plan.TarFile.Equal(state.TarFile) {
+	// Get the expected image SHA from the tar file
+	tarFilePath := strings.Trim(plan.TarFile.ValueString(), `"`)
+	expectedImageSHA, err := d.getImageSHAFromLocalTar(tarFilePath)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
+		return
+	}
+
+	// Check if tar file path changed OR if the expected image SHA differs from current state
+	if !plan.TarFile.Equal(state.TarFile) || expectedImageSHA != state.ImageSHA.ValueString() {
 		oldImageSHA := state.ImageSHA.ValueString()
 
 		if oldImageSHA != "" {
@@ -184,7 +231,8 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 			strings.ReplaceAll(strings.ReplaceAll(fmt.Sprintf("%p", &plan), "0x", ""), "&", ""))
 
 		// Copy local tar file to remote temporary location
-		err := d.provider.machineAccessClient.CopyFile(ctx, tarFilePath, remoteTmpPath)
+		err = d.provider.machineAccessClient.CopyFile(ctx, tarFilePath, remoteTmpPath)
+
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to copy tar file to remote machine", fmt.Sprintf("Error: %v", err))
 			return
@@ -206,13 +254,16 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 			return
 		}
 
-		imageSHA, err := d.getImageSHAAfterLoad(ctx, output)
+		// Verify the image was loaded successfully by checking if it exists
+		inspectCmd := fmt.Sprintf("sudo docker inspect %s", expectedImageSHA)
+		_, err = d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
+
 		if err != nil {
-			resp.Diagnostics.AddError("Failed to get image SHA", fmt.Sprintf("Output: %s, Error: %v", output, err))
+			resp.Diagnostics.AddError("Failed to verify loaded Docker image", fmt.Sprintf("Expected image %s was not found after loading. Load output: %s, Error: %v", expectedImageSHA, output, err))
 			return
 		}
 
-		plan.ImageSHA = types.StringValue(imageSHA)
+		plan.ImageSHA = types.StringValue(expectedImageSHA)
 	}
 
 	diags = resp.State.Set(ctx, plan)
@@ -248,48 +299,56 @@ func (d *dockerImageLoadResource) ImportState(ctx context.Context, req resource.
 	resource.ImportStatePassthroughID(ctx, path.Root("image_sha"), req, resp)
 }
 
-func (d *dockerImageLoadResource) getImageSHAAfterLoad(ctx context.Context, loadOutput string) (string, error) {
-	// First, try to extract image reference from load output
-	imageRef, err := d.extractImageRefFromOutput(loadOutput)
-	if err != nil {
-		return "", err
-	}
-
-	// Get the actual SHA256 by inspecting the image
-	inspectCmd := fmt.Sprintf("sudo docker inspect --format='{{.Id}}' %s", imageRef)
-	shaOutput, err := d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
-
-	if err != nil {
-		// Fallback: list recent images and get the most recent one
-		listCmd := "sudo docker images --no-trunc --format '{{.ID}}' | head -1"
-		shaOutput, err = d.provider.machineAccessClient.RunCommand(ctx, listCmd)
-
-		if err != nil {
-			return "", fmt.Errorf("failed to get image SHA: %v", err)
-		}
-	}
-
-	sha := strings.TrimSpace(shaOutput)
-	if !strings.HasPrefix(sha, "sha256:") {
-		sha = "sha256:" + sha
-	}
-
-	return sha, nil
+type dockerManifest struct {
+	Config string `json:"Config"`
 }
 
-func (d *dockerImageLoadResource) extractImageRefFromOutput(output string) (string, error) {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	for _, line := range lines {
-		// Look for "Loaded image: repository:tag"
-		if strings.Contains(line, "Loaded image:") {
-			parts := strings.Split(line, " ")
-			if len(parts) >= 3 {
-				imageRef := strings.TrimSpace(parts[2])
-				return imageRef, nil
+func (d *dockerImageLoadResource) getImageSHAFromLocalTar(tarFilePath string) (string, error) {
+	// #nosec G304 - tarFilePath is user-provided and we need to read their specified tar file
+	file, err := os.Open(tarFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open tar file: %v", err)
+	}
+	defer file.Close()
+
+	tarReader := tar.NewReader(file)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("failed to read tar file: %v", err)
+		}
+
+		if header.Name == "manifest.json" {
+			manifestBytes, err := io.ReadAll(tarReader)
+			if err != nil {
+				return "", fmt.Errorf("failed to read manifest.json: %v", err)
 			}
+
+			var manifests []dockerManifest
+			if err := json.Unmarshal(manifestBytes, &manifests); err != nil {
+				return "", fmt.Errorf("failed to parse manifest.json: %v", err)
+			}
+
+			if len(manifests) == 0 {
+				return "", fmt.Errorf("no manifests found in manifest.json")
+			}
+
+			// Get the config filename, which contains the image SHA
+			configFile := manifests[0].Config
+			imageSHA := strings.TrimSuffix(configFile, ".json")
+
+			if !strings.HasPrefix(imageSHA, "sha256:") {
+				imageSHA = "sha256:" + imageSHA
+			}
+
+			return imageSHA, nil
 		}
 	}
 
-	// Fallback: use "test:latest" as the most likely loaded image name
-	return "test:latest", nil
+	return "", fmt.Errorf("manifest.json not found in tar file")
 }
