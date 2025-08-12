@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	filepath_pkg "path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -30,8 +31,9 @@ type dockerImageLoadResource struct {
 }
 
 type dockerImageLoadResourceModel struct {
-	TarFile  types.String `tfsdk:"tar_file"`
-	ImageSHA types.String `tfsdk:"image_sha"`
+	TarFile     types.String `tfsdk:"tar_file"`
+	ImageSHA    types.String `tfsdk:"image_sha"`
+	ContentHash types.String `tfsdk:"content_hash"`
 }
 
 func (d *dockerImageLoadResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -50,6 +52,10 @@ func (d *dockerImageLoadResource) Schema(_ context.Context, _ resource.SchemaReq
 			"image_sha": schema.StringAttribute{
 				Computed:    true,
 				Description: "SHA of the loaded Docker image",
+			},
+			"content_hash": schema.StringAttribute{
+				Computed:    true,
+				Description: "Hash of the tar file content for change detection",
 			},
 		},
 	}
@@ -75,8 +81,8 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// Get the expected image SHA from the tar file
-	expectedImageSHA, err := d.getImageSHAFromLocalTar(tarFilePath)
+	// Get the content hash for change detection
+	contentHash, err := d.getImageContentHashFromLocalTar(tarFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
 		return
@@ -111,16 +117,22 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// Verify the image was loaded successfully by checking if it exists
-	inspectCmd := fmt.Sprintf("sudo docker inspect %s", expectedImageSHA)
-	_, err = d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
-
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to verify loaded Docker image", fmt.Sprintf("Expected image %s was not found after loading. Load output: %s, Error: %v", expectedImageSHA, output, err))
+	// Parse the docker load output to get the actual loaded image reference
+	loadedImage := d.parseLoadedImageFromOutput(output)
+	if loadedImage == "" {
+		resp.Diagnostics.AddError("Failed to parse loaded image from output", fmt.Sprintf("Could not extract loaded image from docker load output: %s", output))
 		return
 	}
 
-	plan.ImageSHA = types.StringValue(expectedImageSHA)
+	// Get the actual SHA of the loaded image
+	imageSHA, err := d.getImageSHAFromDockerInspect(ctx, loadedImage)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to get loaded Docker image SHA", fmt.Sprintf("Could not get SHA for loaded image %s: %v", loadedImage, err))
+		return
+	}
+
+	plan.ImageSHA = types.StringValue(imageSHA)
+	plan.ContentHash = types.StringValue(contentHash)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -149,16 +161,17 @@ func (d *dockerImageLoadResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	expectedImageSHA, err := d.getImageSHAFromLocalTar(tarFilePath)
+	currentContentHash, err := d.getImageContentHashFromLocalTar(tarFilePath)
 	if err != nil {
 		// Can't read the tar file, treat as if resource should be removed
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	// If the expected SHA differs from current state, the tar content has changed
+	// If the current content hash differs from stored state, the tar content has changed
 	// and we need to trigger an update by removing the resource so it gets recreated
-	if expectedImageSHA != imageSHA {
+	storedContentHash := state.ContentHash.ValueString()
+	if currentContentHash != storedContentHash {
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -197,17 +210,25 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	// Get the expected image SHA from the tar file
+	// Get the expected image content hash from the tar file
 	tarFilePath := strings.Trim(plan.TarFile.ValueString(), `"`)
-	expectedImageSHA, err := d.getImageSHAFromLocalTar(tarFilePath)
+	expectedContentHash, err := d.getImageContentHashFromLocalTar(tarFilePath)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
 		return
 	}
 
-	// Check if tar file path changed OR if the expected image SHA differs from current state
-	if !plan.TarFile.Equal(state.TarFile) || expectedImageSHA != state.ImageSHA.ValueString() {
+	// Get the current tar's content hash
+	oldTarFilePath := strings.Trim(state.TarFile.ValueString(), `"`)
+	oldContentHash := ""
+
+	if _, err := os.Stat(oldTarFilePath); err == nil {
+		oldContentHash, _ = d.getImageContentHashFromLocalTar(oldTarFilePath)
+	}
+
+	// Check if tar file path changed OR if the expected content hash differs from current state
+	if !plan.TarFile.Equal(state.TarFile) || expectedContentHash != oldContentHash {
 		oldImageSHA := state.ImageSHA.ValueString()
 
 		if oldImageSHA != "" {
@@ -254,16 +275,22 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 			return
 		}
 
-		// Verify the image was loaded successfully by checking if it exists
-		inspectCmd := fmt.Sprintf("sudo docker inspect %s", expectedImageSHA)
-		_, err = d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
-
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to verify loaded Docker image", fmt.Sprintf("Expected image %s was not found after loading. Load output: %s, Error: %v", expectedImageSHA, output, err))
+		// Parse the docker load output to get the actual loaded image reference
+		loadedImage := d.parseLoadedImageFromOutput(output)
+		if loadedImage == "" {
+			resp.Diagnostics.AddError("Failed to parse loaded image from output", fmt.Sprintf("Could not extract loaded image from docker load output: %s", output))
 			return
 		}
 
-		plan.ImageSHA = types.StringValue(expectedImageSHA)
+		// Get the actual SHA of the loaded image
+		imageSHA, err := d.getImageSHAFromDockerInspect(ctx, loadedImage)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get loaded Docker image SHA", fmt.Sprintf("Could not get SHA for loaded image %s: %v", loadedImage, err))
+			return
+		}
+
+		plan.ImageSHA = types.StringValue(imageSHA)
+		plan.ContentHash = types.StringValue(expectedContentHash)
 	}
 
 	diags = resp.State.Set(ctx, plan)
@@ -303,7 +330,7 @@ type dockerManifest struct {
 	Config string `json:"Config"`
 }
 
-func (d *dockerImageLoadResource) getImageSHAFromLocalTar(tarFilePath string) (string, error) {
+func (d *dockerImageLoadResource) getImageContentHashFromLocalTar(tarFilePath string) (string, error) {
 	// #nosec G304 - tarFilePath is user-provided and we need to read their specified tar file
 	file, err := os.Open(tarFilePath)
 	if err != nil {
@@ -338,17 +365,58 @@ func (d *dockerImageLoadResource) getImageSHAFromLocalTar(tarFilePath string) (s
 				return "", fmt.Errorf("no manifests found in manifest.json")
 			}
 
-			// Get the config filename, which contains the image SHA
+			// Use the config file name as a content hash for change detection
 			configFile := manifests[0].Config
-			imageSHA := strings.TrimSuffix(configFile, ".json")
 
-			if !strings.HasPrefix(imageSHA, "sha256:") {
-				imageSHA = "sha256:" + imageSHA
-			}
-
-			return imageSHA, nil
+			return configFile, nil
 		}
 	}
 
 	return "", fmt.Errorf("manifest.json not found in tar file")
+}
+
+func (d *dockerImageLoadResource) parseLoadedImageFromOutput(output string) string {
+	// Parse docker load output to extract the loaded image reference
+	// Expected format: "Loaded image: <image_reference>" or "Loaded image ID: <sha256>"
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Loaded image: ") {
+			return strings.TrimPrefix(line, "Loaded image: ")
+		}
+
+		if strings.HasPrefix(line, "Loaded image ID: ") {
+			return strings.TrimPrefix(line, "Loaded image ID: ")
+		}
+	}
+
+	// Fallback: try to extract any sha256 hash from the output
+	re := regexp.MustCompile(`sha256:[a-f0-9]{64}`)
+	if match := re.FindString(output); match != "" {
+		return match
+	}
+
+	return ""
+}
+
+func (d *dockerImageLoadResource) getImageSHAFromDockerInspect(ctx context.Context, imageRef string) (string, error) {
+	// Use docker inspect to get the actual SHA of the loaded image
+	inspectCmd := fmt.Sprintf("sudo docker inspect --format='{{.Id}}' %s", imageRef)
+	output, err := d.provider.machineAccessClient.RunCommand(ctx, inspectCmd)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect image %s: %v", imageRef, err)
+	}
+
+	imageSHA := strings.TrimSpace(output)
+	if imageSHA == "" {
+		return "", fmt.Errorf("empty SHA returned from docker inspect for image %s", imageRef)
+	}
+
+	// Ensure the SHA has the sha256: prefix
+	if !strings.HasPrefix(imageSHA, "sha256:") {
+		imageSHA = "sha256:" + imageSHA
+	}
+
+	return imageSHA, nil
 }

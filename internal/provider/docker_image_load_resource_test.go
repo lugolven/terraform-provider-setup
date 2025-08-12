@@ -189,8 +189,8 @@ func TestDockerImageLoadResource(t *testing.T) {
 	})
 }
 
-func TestGetImageSHAFromLocalTar(t *testing.T) {
-	t.Run("should extract correct SHA from valid tar file", func(t *testing.T) {
+func TestGetImageContentHashFromLocalTar(t *testing.T) {
+	t.Run("should extract correct content hash from valid tar file", func(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "tar-inspect-test")
 		if err != nil {
@@ -206,23 +206,23 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		imageSHA, err := resource.getImageSHAFromLocalTar(tarFile)
+		contentHash, err := resource.getImageContentHashFromLocalTar(tarFile)
 
 		// Assert
 		if err != nil {
 			t.Fatalf("Expected no error, got: %v", err)
 		}
 
-		if !strings.HasPrefix(imageSHA, "sha256:") {
-			t.Errorf("Expected SHA to start with 'sha256:', got: %s", imageSHA)
+		if contentHash == "" {
+			t.Error("Expected non-empty content hash")
 		}
 
-		if len(imageSHA) != 71 {
-			t.Errorf("Expected SHA length to be 71, got: %d", len(imageSHA))
+		if !strings.HasSuffix(contentHash, ".json") {
+			t.Errorf("Expected content hash to end with '.json', got: %s", contentHash)
 		}
 	})
 
-	t.Run("should produce different SHAs for different content", func(t *testing.T) {
+	t.Run("should produce different content hashes for different content", func(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "tar-inspect-test")
 		if err != nil {
@@ -244,8 +244,8 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		imageSHA1, err1 := resource.getImageSHAFromLocalTar(tarFile1)
-		imageSHA2, err2 := resource.getImageSHAFromLocalTar(tarFile2)
+		contentHash1, err1 := resource.getImageContentHashFromLocalTar(tarFile1)
+		contentHash2, err2 := resource.getImageContentHashFromLocalTar(tarFile2)
 
 		// Assert
 		if err1 != nil {
@@ -256,12 +256,12 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 			t.Fatalf("Expected no error for second tar, got: %v", err2)
 		}
 
-		if imageSHA1 == imageSHA2 {
-			t.Errorf("Expected different SHAs for different content, but got same: %s", imageSHA1)
+		if contentHash1 == contentHash2 {
+			t.Errorf("Expected different content hashes for different content, but got same: %s", contentHash1)
 		}
 	})
 
-	t.Run("should produce same SHA for same content", func(t *testing.T) {
+	t.Run("should produce same content hash for same content", func(t *testing.T) {
 		// Arrange
 		tempDir, err := os.MkdirTemp("", "tar-inspect-test")
 		if err != nil {
@@ -284,8 +284,8 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		imageSHA1, err1 := resource.getImageSHAFromLocalTar(tarFile1)
-		imageSHA2, err2 := resource.getImageSHAFromLocalTar(tarFile2)
+		contentHash1, err1 := resource.getImageContentHashFromLocalTar(tarFile1)
+		contentHash2, err2 := resource.getImageContentHashFromLocalTar(tarFile2)
 
 		// Assert
 		if err1 != nil {
@@ -296,8 +296,8 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 			t.Fatalf("Expected no error for second tar, got: %v", err2)
 		}
 
-		if imageSHA1 != imageSHA2 {
-			t.Errorf("Expected same SHAs for identical content, but got different: %s vs %s", imageSHA1, imageSHA2)
+		if contentHash1 != contentHash2 {
+			t.Errorf("Expected same content hashes for identical content, but got different: %s vs %s", contentHash1, contentHash2)
 		}
 	})
 
@@ -306,7 +306,7 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		_, err := resource.getImageSHAFromLocalTar("/nonexistent/file.tar")
+		_, err := resource.getImageContentHashFromLocalTar("/nonexistent/file.tar")
 
 		// Assert
 		if err == nil {
@@ -330,7 +330,7 @@ func TestGetImageSHAFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		_, err = resource.getImageSHAFromLocalTar(invalidTarFile)
+		_, err = resource.getImageContentHashFromLocalTar(invalidTarFile)
 
 		// Assert
 		if err == nil {
