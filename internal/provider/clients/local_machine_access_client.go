@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/docker/docker/client"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -19,7 +20,7 @@ func CreateLocalMachineAccessClient() (MachineAccessClient, error) {
 	return &localMachineAccessClient{}, nil
 }
 
-func (client *localMachineAccessClient) RunCommand(_ context.Context, command string) (string, error) {
+func (localClient *localMachineAccessClient) RunCommand(_ context.Context, command string) (string, error) {
 	cmd := exec.Command("sh", "-c", command)
 
 	var out bytes.Buffer
@@ -33,7 +34,7 @@ func (client *localMachineAccessClient) RunCommand(_ context.Context, command st
 	return out.String(), nil
 }
 
-func (client *localMachineAccessClient) WriteFile(ctx context.Context, path string, mode string, owner string, group string, content string) error {
+func (localClient *localMachineAccessClient) WriteFile(ctx context.Context, path string, mode string, owner string, group string, content string) error {
 	tflog.Debug(ctx, "Writing file content to temp file")
 
 	tmpFile, err := os.CreateTemp("", "tempfile")
@@ -51,21 +52,21 @@ func (client *localMachineAccessClient) WriteFile(ctx context.Context, path stri
 
 	tflog.Debug(ctx, "Moving file to actual path "+path)
 
-	_, err = client.RunCommand(ctx, "mv "+tmpFile.Name()+" "+path)
+	_, err = localClient.RunCommand(ctx, "mv "+tmpFile.Name()+" "+path)
 	if err != nil {
 		return err
 	}
 
 	tflog.Debug(ctx, "Setting owner and group of the file")
 
-	_, err = client.RunCommand(ctx, "chown "+owner+":"+group+" "+path)
+	_, err = localClient.RunCommand(ctx, "chown "+owner+":"+group+" "+path)
 	if err != nil {
 		return err
 	}
 
 	tflog.Debug(ctx, "Setting mode of the file")
 
-	_, err = client.RunCommand(ctx, "chmod "+mode+" "+path)
+	_, err = localClient.RunCommand(ctx, "chmod "+mode+" "+path)
 	if err != nil {
 		return err
 	}
@@ -73,7 +74,7 @@ func (client *localMachineAccessClient) WriteFile(ctx context.Context, path stri
 	return nil
 }
 
-func (client *localMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
+func (localClient *localMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
 	tflog.Debug(ctx, fmt.Sprintf("Copying file from %s to %s", localPath, remotePath))
 
 	srcFile, err := os.Open(localPath) // #nosec G304
@@ -94,4 +95,14 @@ func (client *localMachineAccessClient) CopyFile(ctx context.Context, localPath 
 	}
 
 	return nil
+}
+
+func (localClient *localMachineAccessClient) CreateDockerClient(_ context.Context) (*client.Client, error) {
+	// For local machine, create a standard Docker client
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Docker client: %v", err)
+	}
+
+	return dockerClient, nil
 }

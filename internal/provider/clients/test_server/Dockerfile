@@ -2,9 +2,9 @@
 # todo: test this with other images such as debian
 FROM ubuntu:latest
 
-# Install SSH server
+# Install SSH server and socat for Docker socket tunneling
 RUN apt-get update && \
-    apt-get install -y ssh lsof && \
+    apt-get install -y ssh lsof socat && \
     apt-get clean
 
 RUN useradd -ms /bin/bash test
@@ -22,7 +22,7 @@ COPY ./main.sh /app/main.sh
 EXPOSE 22
 
 RUN apt-get update && \
-    apt-get install -y vlc
+    apt-get install -y vlc docker.io
 
 # Start SSH service
 ENTRYPOINT  ["/app/main.sh"]

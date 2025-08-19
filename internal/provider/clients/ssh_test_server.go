@@ -164,6 +164,7 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 		Binds: []string{
 			"/var/run/docker.sock:/var/run/docker.sock",
 		},
+		Privileged: true, // Allow Docker access
 	}, nil, nil, "")
 
 	if err != nil {
