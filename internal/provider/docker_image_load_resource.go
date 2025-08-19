@@ -61,7 +61,7 @@ func (d *dockerImageLoadResource) Schema(_ context.Context, _ resource.SchemaReq
 	}
 }
 
-func (d *dockerImageLoadResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (d *dockerImageLoadResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
 	// Docker client will be created on-demand for each operation
 }
 
@@ -305,6 +305,7 @@ func (d *dockerImageLoadResource) loadImageUsingRemoteDocker(ctx context.Context
 	}
 
 	// Open the tar file for loading
+	// #nosec G304 - tarFilePath is user-provided and we need to read their specified tar file
 	tarFile, err := os.Open(tarFilePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open tar file: %v", err)
@@ -339,22 +340,6 @@ func (d *dockerImageLoadResource) loadImageUsingRemoteDocker(ctx context.Context
 	return imageInspect.ID, nil
 }
 
-
-func (d *dockerImageLoadResource) getImageSHARemotely(ctx context.Context, imageRef string) (string, error) {
-	// Create Docker client on-demand using the machine access client
-	dockerClient, err := d.provider.machineAccessClient.CreateDockerClient(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to create Docker client: %v", err)
-	}
-
-	imageInspect, _, err := dockerClient.ImageInspectWithRaw(ctx, imageRef)
-	if err != nil {
-		return "", fmt.Errorf("failed to inspect image %s: %v", imageRef, err)
-	}
-
-	return imageInspect.ID, nil
-}
-
 func (d *dockerImageLoadResource) imageExistsRemotely(ctx context.Context, imageSHA string) bool {
 	// Create Docker client on-demand using the machine access client
 	dockerClient, err := d.provider.machineAccessClient.CreateDockerClient(ctx)
@@ -363,6 +348,7 @@ func (d *dockerImageLoadResource) imageExistsRemotely(ctx context.Context, image
 	}
 
 	_, _, err = dockerClient.ImageInspectWithRaw(ctx, imageSHA)
+
 	return err == nil
 }
 
@@ -374,6 +360,7 @@ func (d *dockerImageLoadResource) removeImageRemotely(ctx context.Context, image
 	}
 
 	_, err = dockerClient.ImageRemove(ctx, imageSHA, dockertypes.ImageRemoveOptions{})
+
 	return err
 }
 
@@ -381,8 +368,6 @@ func (d *dockerImageLoadResource) parseLoadedImageFromOutput(output string) stri
 	// Parse docker load output to extract the loaded image reference
 	// For Docker SDK, the output may be in JSON streaming format: {"stream":"Loaded image: <image_reference>\n"}
 	// For raw command output: "Loaded image: <image_reference>" or "Loaded image ID: <sha256>"
-	
-	// Try to parse JSON stream format first
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -390,16 +375,18 @@ func (d *dockerImageLoadResource) parseLoadedImageFromOutput(output string) stri
 			var streamOutput struct {
 				Stream string `json:"stream"`
 			}
+
 			if err := json.Unmarshal([]byte(line), &streamOutput); err == nil {
 				if strings.HasPrefix(streamOutput.Stream, "Loaded image: ") {
 					return strings.TrimPrefix(strings.TrimSpace(streamOutput.Stream), "Loaded image: ")
 				}
+
 				if strings.HasPrefix(streamOutput.Stream, "Loaded image ID: ") {
 					return strings.TrimPrefix(strings.TrimSpace(streamOutput.Stream), "Loaded image ID: ")
 				}
 			}
 		}
-		
+
 		// Fallback to raw format parsing
 		if strings.HasPrefix(line, "Loaded image: ") {
 			return strings.TrimPrefix(line, "Loaded image: ")
@@ -418,4 +405,3 @@ func (d *dockerImageLoadResource) parseLoadedImageFromOutput(output string) stri
 
 	return ""
 }
-
