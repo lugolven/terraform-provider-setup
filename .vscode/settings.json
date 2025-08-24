@@ -5,5 +5,9 @@
         "--config=/workspaces/terraform-provider-setup/.golangci.yml"
     ],
     "go.lintOnSave": "package",
-    "go.formatTool": "gofumpt"
+    "go.formatTool": "gofumpt",
+    "go.testEnvVars": {
+        "TF_ACC": "True"
+    },
+
 }

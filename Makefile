@@ -19,7 +19,7 @@ build-assets: internal/provider/clients/test_server.tar
 
 build: ${GOBIN}/terraform-provider-setup build-assets
 
-tests: build-assets
+tests: build-assets lint
 	TF_ACC=True go test -v ./...
 
 test-terraform: build
