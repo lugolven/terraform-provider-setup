@@ -1,0 +1,280 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
+package provider
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+// Ensure provider defined types fully satisfy framework interfaces.
+var _ resource.Resource = &sshKeyResource{}
+var _ resource.ResourceWithImportState = &sshKeyResource{}
+
+func newSSHKeyResource(p *internalProvider) resource.Resource {
+	return &sshKeyResource{
+		provider: p,
+	}
+}
+
+// sshKeyResource defines the resource implementation.
+type sshKeyResource struct {
+	provider *internalProvider
+}
+
+const (
+	keyTypeRSA = "rsa"
+	keyTypeDSA = "dsa"
+)
+
+type sshKeyResourceModel struct {
+	Path      types.String `tfsdk:"path"`
+	KeyType   types.String `tfsdk:"key_type"`
+	KeySize   types.Int64  `tfsdk:"key_size"`
+	PublicKey types.String `tfsdk:"public_key"`
+}
+
+func (r *sshKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_ssh_key"
+}
+
+func (r *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "SSH Key resource that generates SSH keys using ssh-keygen on the remote machine",
+
+		Attributes: map[string]schema.Attribute{
+			"path": schema.StringAttribute{
+				Required:    true,
+				Description: "The path where the SSH private key will be stored (public key will be stored at path.pub)",
+			},
+			"key_type": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "The type of SSH key to generate (rsa, ed25519, ecdsa, dsa). Defaults to 'rsa'",
+			},
+			"key_size": schema.Int64Attribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "The size of the SSH key in bits. Defaults to 2048 for RSA keys",
+			},
+			"public_key": schema.StringAttribute{
+				Computed:    true,
+				Description: "The generated public key content",
+			},
+		},
+	}
+}
+
+func (r *sshKeyResource) Configure(_ context.Context, _ resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+
+}
+
+func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var plan sshKeyResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	// Set defaults
+	keyType := keyTypeRSA
+	if !plan.KeyType.IsNull() && !plan.KeyType.IsUnknown() {
+		keyType = plan.KeyType.ValueString()
+	}
+
+	keySize := int64(2048)
+	if !plan.KeySize.IsNull() && !plan.KeySize.IsUnknown() {
+		keySize = plan.KeySize.ValueInt64()
+	}
+
+	// Build ssh-keygen command
+	var cmd strings.Builder
+
+	cmd.WriteString("ssh-keygen -t ")
+	cmd.WriteString(keyType)
+
+	// Only add key size for RSA and DSA keys
+	if keyType == keyTypeRSA || keyType == keyTypeDSA {
+		cmd.WriteString(fmt.Sprintf(" -b %d", keySize))
+	}
+
+	cmd.WriteString(" -f ")
+	cmd.WriteString(plan.Path.ValueString())
+	cmd.WriteString(" -N ''") // No passphrase
+
+	// Generate the SSH key
+	_, err := r.provider.machineAccessClient.RunCommand(ctx, cmd.String())
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to generate SSH key", err.Error())
+		return
+	}
+
+	// Read the public key
+	publicKeyPath := plan.Path.ValueString() + ".pub"
+	publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to read public key", err.Error())
+		return
+	}
+
+	// Update the model with computed values
+	plan.KeyType = types.StringValue(keyType)
+	plan.KeySize = types.Int64Value(keySize)
+	plan.PublicKey = types.StringValue(strings.TrimSpace(publicKeyContent))
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+}
+
+func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var model sshKeyResourceModel
+	diags := req.State.Get(ctx, &model)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	// Check if private key exists
+	_, err := r.provider.machineAccessClient.RunCommand(ctx, "test -f "+model.Path.ValueString())
+
+	if err != nil {
+		// If private key doesn't exist, remove from state
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	// Read the public key
+	publicKeyPath := model.Path.ValueString() + ".pub"
+	publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
+
+	if err != nil {
+		// If public key doesn't exist, remove from state
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	model.PublicKey = types.StringValue(strings.TrimSpace(publicKeyContent))
+
+	diags = resp.State.Set(ctx, model)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+}
+
+func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan sshKeyResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	var state sshKeyResourceModel
+	diags = req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	// If path, key_type, or key_size changed, we need to regenerate the key
+	if !plan.Path.Equal(state.Path) || !plan.KeyType.Equal(state.KeyType) || !plan.KeySize.Equal(state.KeySize) {
+		// Delete old keys first
+		_, _ = r.provider.machineAccessClient.RunCommand(ctx, "rm -f "+state.Path.ValueString()+" "+state.Path.ValueString()+".pub")
+
+		// Set defaults for new key
+		keyType := keyTypeRSA
+		if !plan.KeyType.IsNull() && !plan.KeyType.IsUnknown() {
+			keyType = plan.KeyType.ValueString()
+		}
+
+		keySize := int64(2048)
+		if !plan.KeySize.IsNull() && !plan.KeySize.IsUnknown() {
+			keySize = plan.KeySize.ValueInt64()
+		}
+
+		// Build ssh-keygen command
+		var cmd strings.Builder
+
+		cmd.WriteString("ssh-keygen -t ")
+		cmd.WriteString(keyType)
+
+		// Only add key size for RSA and DSA keys
+		if keyType == keyTypeRSA || keyType == keyTypeDSA {
+			cmd.WriteString(fmt.Sprintf(" -b %d", keySize))
+		}
+
+		cmd.WriteString(" -f ")
+		cmd.WriteString(plan.Path.ValueString())
+		cmd.WriteString(" -N ''") // No passphrase
+
+		// Generate the SSH key
+		_, err := r.provider.machineAccessClient.RunCommand(ctx, cmd.String())
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to generate SSH key", err.Error())
+			return
+		}
+
+		// Read the public key
+		publicKeyPath := plan.Path.ValueString() + ".pub"
+		publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
+
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to read public key", err.Error())
+			return
+		}
+
+		// Update the model with computed values
+		plan.KeyType = types.StringValue(keyType)
+		plan.KeySize = types.Int64Value(keySize)
+		plan.PublicKey = types.StringValue(strings.TrimSpace(publicKeyContent))
+	}
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+}
+
+func (r *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var model sshKeyResourceModel
+	diags := req.State.Get(ctx, &model)
+	resp.Diagnostics.Append(diags...)
+
+	if diags.HasError() {
+		return
+	}
+
+	// Delete both private and public key files
+	_, err := r.provider.machineAccessClient.RunCommand(ctx, "rm -f "+model.Path.ValueString()+" "+model.Path.ValueString()+".pub")
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to delete SSH key", err.Error())
+		return
+	}
+}
+
+func (r *sshKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("path"), req, resp)
+}

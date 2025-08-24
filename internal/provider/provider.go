@@ -118,6 +118,8 @@ func (p *internalProvider) Resources(_ context.Context) []func() resource.Resour
 		p.newAptPackagesResource,
 		p.newAptRepositoryResource,
 		p.newDockerImageLoadResource,
+		p.newSSHKeyResource,
+		p.newSSHAddResource,
 	}
 }
 
@@ -147,4 +149,12 @@ func (p *internalProvider) newAptRepositoryResource() resource.Resource {
 
 func (p *internalProvider) newDockerImageLoadResource() resource.Resource {
 	return newDockerImageLoadResource(p)
+}
+
+func (p *internalProvider) newSSHKeyResource() resource.Resource {
+	return newSSHKeyResource(p)
+}
+
+func (p *internalProvider) newSSHAddResource() resource.Resource {
+	return newSSHAddResource(p)
 }
