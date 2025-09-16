@@ -180,12 +180,9 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 	err = retry.Do(func() error {
 		t.Log("Trying to connect to the container via ssh")
 
-		if _, err := sshClientBuilder.Build(t.Context()); err != nil {
-			t.Log("Failed to connect ot the container via ssh")
-			return err
-		}
+		_, err := sshClientBuilder.Build(t.Context())
 
-		return nil
+		return err
 	}, retry.Attempts(60), retry.Delay(1*time.Second))
 
 	if err != nil {
