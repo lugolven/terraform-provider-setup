@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/docker/docker/client"
+	dockerClient "github.com/docker/docker/client"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -97,9 +97,9 @@ func (localClient *localMachineAccessClient) CopyFile(ctx context.Context, local
 	return nil
 }
 
-func (localClient *localMachineAccessClient) CreateDockerClient(_ context.Context) (*client.Client, error) {
+func (localClient *localMachineAccessClient) GetDockerClient(_ context.Context) (*dockerClient.Client, error) {
 	// For local machine, create a standard Docker client
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	dockerClient, err := dockerClient.NewClientWithOpts(dockerClient.FromEnv, dockerClient.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %v", err)
 	}

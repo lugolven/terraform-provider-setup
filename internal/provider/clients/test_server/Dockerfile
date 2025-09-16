@@ -2,9 +2,9 @@
 # todo: test this with other images such as debian
 FROM ubuntu:latest
 
-# Install SSH server and socat for Docker socket tunneling
+# Install SSH server
 RUN apt-get update && \
-    apt-get install -y ssh lsof socat && \
+    apt-get install -y ssh lsof && \
     apt-get clean
 
 RUN useradd -ms /bin/bash test
@@ -20,9 +20,6 @@ RUN apt install sudo -y
 RUN echo "test ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 COPY ./main.sh /app/main.sh
 EXPOSE 22
-
-RUN apt-get update && \
-    apt-get install -y vlc docker.io
 
 # Start SSH service
 ENTRYPOINT  ["/app/main.sh"]

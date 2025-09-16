@@ -6,11 +6,12 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"sync"
 
 	"os"
 
 	scp "github.com/bramvdbogaerde/go-scp"
-	"github.com/docker/docker/client"
+	dockerClient "github.com/docker/docker/client"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
@@ -99,7 +100,9 @@ func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (Machin
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
 
-	return &sshMachineAccessClient{conn}, nil
+	return &sshMachineAccessClient{
+		Client: conn,
+	}, nil
 }
 
 func publicKeyFile(file string) (ssh.AuthMethod, error) {
@@ -123,11 +126,9 @@ func publicKeyFile(file string) (ssh.AuthMethod, error) {
 
 type sshMachineAccessClient struct {
 	*ssh.Client
-}
-
-// GetSSHClient returns the underlying SSH client for advanced operations
-func (sshClient *sshMachineAccessClient) GetSSHClient() *ssh.Client {
-	return sshClient.Client
+	dockerClient     *dockerClient.Client
+	dockerClientOnce sync.Once
+	dockerClientErr  error
 }
 
 func (sshClient *sshMachineAccessClient) RunCommand(ctx context.Context, command string) (string, error) {
@@ -229,7 +230,15 @@ func (sshClient *sshMachineAccessClient) CopyFile(ctx context.Context, localPath
 	return nil
 }
 
-func (sshClient *sshMachineAccessClient) CreateDockerClient(ctx context.Context) (*client.Client, error) {
+func (sshClient *sshMachineAccessClient) GetDockerClient(ctx context.Context) (*dockerClient.Client, error) {
+	sshClient.dockerClientOnce.Do(func() {
+		sshClient.dockerClient, sshClient.dockerClientErr = sshClient.createDockerClient(ctx)
+	})
+
+	return sshClient.dockerClient, sshClient.dockerClientErr
+}
+
+func (sshClient *sshMachineAccessClient) createDockerClient(ctx context.Context) (*dockerClient.Client, error) {
 	// Start SSH port forwarding in the background
 	localPort, cleanup, err := sshClient.startSSHPortForwarding(ctx)
 	if err != nil {
@@ -237,9 +246,9 @@ func (sshClient *sshMachineAccessClient) CreateDockerClient(ctx context.Context)
 	}
 
 	// Create Docker client that connects to the local forwarded port
-	dockerClient, err := client.NewClientWithOpts(
-		client.WithHost(fmt.Sprintf("tcp://localhost:%d", localPort)),
-		client.WithAPIVersionNegotiation(),
+	dockerClient, err := dockerClient.NewClientWithOpts(
+		dockerClient.WithHost(fmt.Sprintf("tcp://localhost:%d", localPort)),
+		dockerClient.WithAPIVersionNegotiation(),
 	)
 	if err != nil {
 		cleanup()

@@ -299,7 +299,7 @@ func (d *dockerImageLoadResource) getImageContentHashFromLocalTar(tarFilePath st
 
 func (d *dockerImageLoadResource) loadImageUsingRemoteDocker(ctx context.Context, tarFilePath string) (string, error) {
 	// Create Docker client on-demand using the machine access client
-	dockerClient, err := d.provider.machineAccessClient.CreateDockerClient(ctx)
+	dockerClient, err := d.provider.machineAccessClient.GetDockerClient(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to create Docker client: %v", err)
 	}
@@ -342,7 +342,7 @@ func (d *dockerImageLoadResource) loadImageUsingRemoteDocker(ctx context.Context
 
 func (d *dockerImageLoadResource) imageExistsRemotely(ctx context.Context, imageSHA string) bool {
 	// Create Docker client on-demand using the machine access client
-	dockerClient, err := d.provider.machineAccessClient.CreateDockerClient(ctx)
+	dockerClient, err := d.provider.machineAccessClient.GetDockerClient(ctx)
 	if err != nil {
 		return false
 	}
@@ -354,7 +354,7 @@ func (d *dockerImageLoadResource) imageExistsRemotely(ctx context.Context, image
 
 func (d *dockerImageLoadResource) removeImageRemotely(ctx context.Context, imageSHA string) error {
 	// Create Docker client on-demand using the machine access client
-	dockerClient, err := d.provider.machineAccessClient.CreateDockerClient(ctx)
+	dockerClient, err := d.provider.machineAccessClient.GetDockerClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create Docker client: %v", err)
 	}
