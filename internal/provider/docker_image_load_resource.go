@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var _ resource.Resource = &dockerImageLoadResource{}
@@ -83,7 +84,7 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Get the content hash for change detection
-	contentHash, err := d.getImageContentHashFromLocalTar(tarFilePath)
+	contentHash, err := d.getImageContentHashFromLocalTar(ctx, tarFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
 		return
@@ -126,7 +127,7 @@ func (d *dockerImageLoadResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	currentContentHash, err := d.getImageContentHashFromLocalTar(tarFilePath)
+	currentContentHash, err := d.getImageContentHashFromLocalTar(ctx, tarFilePath)
 	if err != nil {
 		// Can't read the tar file, treat as if resource should be removed
 		resp.State.RemoveResource(ctx)
@@ -174,7 +175,7 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 
 	// Get the expected image content hash from the tar file
 	tarFilePath := strings.Trim(plan.TarFile.ValueString(), `"`)
-	expectedContentHash, err := d.getImageContentHashFromLocalTar(tarFilePath)
+	expectedContentHash, err := d.getImageContentHashFromLocalTar(ctx, tarFilePath)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
@@ -186,7 +187,7 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 	oldContentHash := ""
 
 	if _, err := os.Stat(oldTarFilePath); err == nil {
-		oldContentHash, _ = d.getImageContentHashFromLocalTar(oldTarFilePath)
+		oldContentHash, _ = d.getImageContentHashFromLocalTar(ctx, oldTarFilePath)
 	}
 
 	// Check if tar file path changed OR if the expected content hash differs from current state
@@ -252,7 +253,9 @@ type dockerManifest struct {
 	Config string `json:"Config"`
 }
 
-func (d *dockerImageLoadResource) getImageContentHashFromLocalTar(tarFilePath string) (string, error) {
+func (d *dockerImageLoadResource) getImageContentHashFromLocalTar(ctx context.Context, tarFilePath string) (string, error) {
+	tflog.Debug(ctx, "Getting the sha of the local tar file")
+
 	// #nosec G304 - tarFilePath is user-provided and we need to read their specified tar file
 	file, err := os.Open(tarFilePath)
 	if err != nil {

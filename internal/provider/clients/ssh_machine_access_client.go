@@ -101,7 +101,8 @@ func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (Machin
 	}
 
 	return &sshMachineAccessClient{
-		Client: conn,
+		Client:             conn,
+		dockerClientLocker: &sync.Mutex{},
 	}, nil
 }
 
@@ -126,9 +127,9 @@ func publicKeyFile(file string) (ssh.AuthMethod, error) {
 
 type sshMachineAccessClient struct {
 	*ssh.Client
-	dockerClient     *dockerClient.Client
-	dockerClientOnce sync.Once
-	dockerClientErr  error
+	dockerClient       *dockerClient.Client
+	dockerClientLocker sync.Locker
+	dockerClientErr    error
 }
 
 func (sshClient *sshMachineAccessClient) RunCommand(ctx context.Context, command string) (string, error) {
@@ -231,9 +232,11 @@ func (sshClient *sshMachineAccessClient) CopyFile(ctx context.Context, localPath
 }
 
 func (sshClient *sshMachineAccessClient) GetDockerClient(ctx context.Context) (*dockerClient.Client, error) {
-	sshClient.dockerClientOnce.Do(func() {
+	sshClient.dockerClientLocker.Lock()
+	if sshClient.dockerClient == nil || sshClient.dockerClientErr != nil {
 		sshClient.dockerClient, sshClient.dockerClientErr = sshClient.createDockerClient(ctx)
-	})
+	}
+	sshClient.dockerClientLocker.Unlock()
 
 	return sshClient.dockerClient, sshClient.dockerClientErr
 }
@@ -279,6 +282,13 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 		listener.Close()
 	}
 
+	// Connect to Docker daemon on the remote host (default Docker socket)
+	remoteConn, err := sshClient.Dial("unix", "/var/run/docker.sock")
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket: %v", err))
+		return -1, nil, fmt.Errorf("Could not dial /var/run/docker.sock. err=%w", err)
+	}
+
 	// Start forwarding in a goroutine
 	go func() {
 		defer listener.Close()
@@ -302,7 +312,7 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 				}
 
 				// Handle the connection in another goroutine
-				go sshClient.handlePortForward(ctx, localConn, done)
+				go sshClient.handlePortForward(ctx, localConn, remoteConn, done)
 			}
 		}
 	}()
@@ -310,15 +320,8 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 	return localPort, cleanup, nil
 }
 
-func (sshClient *sshMachineAccessClient) handlePortForward(ctx context.Context, localConn net.Conn, done <-chan struct{}) {
+func (sshClient *sshMachineAccessClient) handlePortForward(_ context.Context, localConn net.Conn, remoteConn net.Conn, done <-chan struct{}) {
 	defer localConn.Close()
-
-	// Connect to Docker daemon on the remote host (default Docker socket)
-	remoteConn, err := sshClient.Dial("unix", "/var/run/docker.sock")
-	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket: %v", err))
-		return
-	}
 	defer remoteConn.Close()
 
 	// Forward data between local and remote connections

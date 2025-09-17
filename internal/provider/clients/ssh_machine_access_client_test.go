@@ -11,8 +11,8 @@ import (
 
 func TestSshRunCommand(t *testing.T) {
 	expectedHelloOutput := "hello\n"
-
 	t.Run("successful command execution with private key", func(t *testing.T) {
+		t.Parallel()
 		// Arrange
 		keyPath, err := os.CreateTemp("", "key")
 		if err != nil {
@@ -50,6 +50,7 @@ func TestSshRunCommand(t *testing.T) {
 	})
 
 	t.Run("successful command execution with ssh agent", func(t *testing.T) {
+		t.Parallel()
 		// Arrange
 		keyPath, err := os.CreateTemp("", "key")
 		if err != nil {
