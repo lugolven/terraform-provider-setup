@@ -22,7 +22,6 @@ linters:
     - staticcheck
     - unused
     - revive
-    - typecheck
     - unused # will be used insted of varcheck + deadcode + structcheck. More info https://github.com/golangci/golangci-lint/issues/1841
     - copyloopvar
     - prealloc
