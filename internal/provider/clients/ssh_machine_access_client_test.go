@@ -11,6 +11,7 @@ import (
 
 func TestSshRunCommand(t *testing.T) {
 	expectedHelloOutput := "hello\n"
+
 	t.Run("successful command execution with private key", func(t *testing.T) {
 		t.Parallel()
 		// Arrange

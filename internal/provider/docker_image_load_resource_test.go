@@ -37,7 +37,7 @@ func TestDockerImageLoadResource(t *testing.T) {
 				{
 					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t),
 					Check: resource.ComposeTestCheckFunc(
-						func(s *terraform.State) error {
+						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err

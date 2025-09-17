@@ -112,7 +112,7 @@ func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req reso
 		return
 	}
 
-	arch := strings.Replace(string(archResponse), "\n", "", -1)
+	arch := strings.ReplaceAll(string(archResponse), "\n", "")
 
 	// 4. Get the flavor of the system by running `lsb_release -cs` or `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`
 	flavorResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
@@ -121,7 +121,7 @@ func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req reso
 		return
 	}
 
-	flavor := strings.Replace(string(flavorResponse), "\n", "", -1)
+	flavor := strings.ReplaceAll(string(flavorResponse), "\n", "")
 
 	// 5. Add the repository to /etc/apt/sources.list.d/<name>.list with the following content:
 	// 	echo \
@@ -240,7 +240,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		return
 	}
 
-	arch := strings.Replace(string(archResponse), "\n", "", -1)
+	arch := strings.ReplaceAll(string(archResponse), "\n", "")
 
 	flavorResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
 	if err != nil {
@@ -248,7 +248,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		return
 	}
 
-	flavor := strings.Replace(string(flavorResponse), "\n", "", -1)
+	flavor := strings.ReplaceAll(string(flavorResponse), "\n", "")
 
 	// Update the repository source list
 	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, `echo "deb [arch=`+arch+` signed-by=/etc/apt/keyrings/`+plan.Name.ValueString()+`.asc] `+plan.URL.ValueString()+` `+flavor+` stable" | sudo tee /etc/apt/sources.list.d/`+plan.Name.ValueString()+`.list > /dev/null`)

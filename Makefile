@@ -51,7 +51,7 @@ ${GOBIN}/tools:
 	mkdir -p ${GOBIN}/tools
 
 ${GOBIN}/tools/golangci-lint: ${GOBIN}/tools
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b ${GOBIN}/tools/golangci-lint v1.64.5
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b ${GOBIN}/tools/golangci-lint v2.4.0
 	chmod +x ${GOBIN}/tools/golangci-lint
 
 lint:${GOBIN}/tools/golangci-lint

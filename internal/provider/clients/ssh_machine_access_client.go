@@ -286,7 +286,7 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 	remoteConn, err := sshClient.Dial("unix", "/var/run/docker.sock")
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket: %v", err))
-		return -1, nil, fmt.Errorf("Could not dial /var/run/docker.sock. err=%w", err)
+		return -1, nil, fmt.Errorf("could not dial /var/run/docker.sock. err=%w", err)
 	}
 
 	// Start forwarding in a goroutine
