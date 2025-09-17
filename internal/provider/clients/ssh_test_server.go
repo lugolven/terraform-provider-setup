@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,16 +104,21 @@ func CreateSSHKey(t *testing.T, keyPath string) error {
 	return nil
 }
 
-// StartDockerSSHServer starts a new docker container with an ssh server that accepts the given public key.
-func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPath string) (port int, stop func(), err error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return -1, nil, err
+var imageName = ""
+
+var buildDockerImageLock = sync.Mutex{}
+
+func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
+	buildDockerImageLock.Lock()
+	defer buildDockerImageLock.Unlock()
+
+	if imageName != "" {
+		return imageName, nil
 	}
 
 	buildCtx := bytes.NewBuffer(testServerTar)
 
-	imageName := "test/" + randomString(10)
+	imageName = "test/" + randomString(10)
 	t.Logf("Building image %s", imageName)
 	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
 		Tags:           []string{imageName},
@@ -122,7 +128,7 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 	})
 
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to build image: %w", err)
+		return "", fmt.Errorf("failed to build image: %w", err)
 	}
 
 	defer buildResponse.Body.Close()
@@ -134,8 +140,23 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 		}
 
 		if err != nil {
-			return -1, nil, fmt.Errorf("failed to read build response: %w", err)
+			return "", fmt.Errorf("failed to read build response: %w", err)
 		}
+	}
+
+	return imageName, nil
+}
+
+// StartDockerSSHServer starts a new docker container with an ssh server that accepts the given public key.
+func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPath string) (port int, stop func(), err error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	imageName, err := buildDockerImage(t, cli)
+	if err != nil {
+		return -1, nil, fmt.Errorf("failed to build the image: %w", err)
 	}
 
 	keyContent, err := os.ReadFile(authorizedKeysPath) // #nosec G304 - this is only used for testing
@@ -220,10 +241,6 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 
 		if err := cli.ContainerRemove(ctx, containerResponse.ID, container.RemoveOptions{}); err != nil {
 			t.Fatalf("failed to remove container: %v", err)
-		}
-
-		if _, err := cli.ImageRemove(ctx, imageName, types.ImageRemoveOptions{}); err != nil {
-			t.Fatalf("failed to remove image: %v", err)
 		}
 	}, nil
 }
