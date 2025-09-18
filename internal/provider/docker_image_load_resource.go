@@ -68,6 +68,7 @@ func (d *dockerImageLoadResource) Configure(_ context.Context, _ resource.Config
 
 func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan dockerImageLoadResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -110,6 +111,7 @@ func (d *dockerImageLoadResource) Create(ctx context.Context, req resource.Creat
 
 func (d *dockerImageLoadResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state dockerImageLoadResourceModel
+
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -158,6 +160,7 @@ func (d *dockerImageLoadResource) Read(ctx context.Context, req resource.ReadReq
 
 func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan dockerImageLoadResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -166,6 +169,7 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	var state dockerImageLoadResourceModel
+
 	diags = req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -175,8 +179,8 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 
 	// Get the expected image content hash from the tar file
 	tarFilePath := strings.Trim(plan.TarFile.ValueString(), `"`)
-	expectedContentHash, err := d.getImageContentHashFromLocalTar(ctx, tarFilePath)
 
+	expectedContentHash, err := d.getImageContentHashFromLocalTar(ctx, tarFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to inspect tar file", fmt.Sprintf("Error reading tar file %s: %v", tarFilePath, err))
 		return
@@ -229,6 +233,7 @@ func (d *dockerImageLoadResource) Update(ctx context.Context, req resource.Updat
 
 func (d *dockerImageLoadResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state dockerImageLoadResourceModel
+
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 

@@ -375,8 +375,8 @@ func createTestDockerImageTar(tarFile string) error {
 
 func createTestDockerImageTarWithContent(tarFile, content string) error {
 	cleanPath := filepath.Clean(tarFile)
-	file, err := os.Create(cleanPath)
 
+	file, err := os.Create(cleanPath)
 	if err != nil {
 		return err
 	}
@@ -392,6 +392,7 @@ func createTestDockerImageTarWithContent(tarFile, content string) error {
 
 	// Create a proper layer tar file first
 	var layerBuf bytes.Buffer
+
 	layerTarWriter := tar.NewWriter(&layerBuf)
 
 	// Add a simple file to the layer

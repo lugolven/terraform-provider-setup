@@ -11,7 +11,7 @@ linters:
     - revive
     - staticcheck
     - unused
-    - wsl
+    - wsl_v5
   settings:
     dupl:
       threshold: 100

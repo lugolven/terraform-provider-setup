@@ -58,8 +58,8 @@ func (builder *sshMachineAccessClientBuilder) buildAuthMethod() ([]ssh.AuthMetho
 		}
 
 		sshAgentClient := agent.NewClient(sshAgent)
-		signers, err := sshAgentClient.Signers()
 
+		signers, err := sshAgentClient.Signers()
 		if err != nil {
 			return nil, errors.Wrap(err, "couldn't get signers from ssh-agent")
 		}
@@ -94,8 +94,8 @@ func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (Machin
 
 	addr := fmt.Sprintf("%v:%v", builder.host, builder.port)
 	tflog.Debug(ctx, "Dialing "+addr)
-	conn, err := ssh.Dial("tcp", addr, sshConfig)
 
+	conn, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
@@ -140,8 +140,8 @@ func (sshClient *sshMachineAccessClient) RunCommand(ctx context.Context, command
 	defer session.Close()
 
 	tflog.Debug(ctx, "Running command: "+command)
-	out, err := session.CombinedOutput(command)
 
+	out, err := session.CombinedOutput(command)
 	if err != nil {
 		if exitErr, ok := err.(*ssh.ExitError); ok {
 			return string(out), ExitError{
@@ -233,9 +233,11 @@ func (sshClient *sshMachineAccessClient) CopyFile(ctx context.Context, localPath
 
 func (sshClient *sshMachineAccessClient) GetDockerClient(ctx context.Context) (*dockerClient.Client, error) {
 	sshClient.dockerClientLocker.Lock()
+
 	if sshClient.dockerClient == nil || sshClient.dockerClientErr != nil {
 		sshClient.dockerClient, sshClient.dockerClientErr = sshClient.createDockerClient(ctx)
 	}
+
 	sshClient.dockerClientLocker.Unlock()
 
 	return sshClient.dockerClient, sshClient.dockerClientErr
@@ -328,12 +330,14 @@ func (sshClient *sshMachineAccessClient) handlePortForward(_ context.Context, lo
 	go func() {
 		defer remoteConn.Close()
 		defer localConn.Close()
+
 		_, _ = io.Copy(remoteConn, localConn)
 	}()
 
 	go func() {
 		defer remoteConn.Close()
 		defer localConn.Close()
+
 		_, _ = io.Copy(localConn, remoteConn)
 	}()
 

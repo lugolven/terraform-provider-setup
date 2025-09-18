@@ -24,9 +24,10 @@ func (localClient *localMachineAccessClient) RunCommand(_ context.Context, comma
 	cmd := exec.Command("sh", "-c", command)
 
 	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
 
+	cmd.Stdout = &out
+
+	err := cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("failed to run command %s: %w", command, err)
 	}

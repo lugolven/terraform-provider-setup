@@ -76,6 +76,7 @@ func (file *fileResource) Configure(_ context.Context, _ resource.ConfigureReque
 
 func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan fileResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -105,6 +106,7 @@ func (file *fileResource) Create(ctx context.Context, req resource.CreateRequest
 
 func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model fileResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -129,8 +131,8 @@ func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	statParts := strings.Split(strings.Trim(stat, "\n"), " ")
-	owner, err := strconv.ParseInt(statParts[0], 10, 64)
 
+	owner, err := strconv.ParseInt(statParts[0], 10, 64)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to parse owner", err.Error())
 		return
@@ -156,6 +158,7 @@ func (file *fileResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 func (file *fileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan fileResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -185,6 +188,7 @@ func (file *fileResource) Update(ctx context.Context, req resource.UpdateRequest
 
 func (file *fileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model fileResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 

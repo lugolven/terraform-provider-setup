@@ -20,7 +20,7 @@ build-assets: internal/provider/clients/test_server.tar
 build: ${GOBIN}/terraform-provider-setup build-assets
 
 tests: build-assets lint
-	TF_ACC=True go test -v -parallel 5 -timeout 180s ./...
+	TF_ACC=True go test -v -timeout 20s ./...
 
 test-terraform: build
 	cd test && rm -rf .terraform || true
@@ -56,6 +56,8 @@ ${GOBIN}/tools/golangci-lint: ${GOBIN}/tools
 
 lint:${GOBIN}/tools/golangci-lint
 	${GOBIN}/tools/golangci-lint//golangci-lint run --config ${ROOT_DIR}/.golangci.yml
+lint-fix:${GOBIN}/tools/golangci-lint
+	${GOBIN}/tools/golangci-lint//golangci-lint run --config ${ROOT_DIR}/.golangci.yml --fix
 
 ci: build tests lint
 

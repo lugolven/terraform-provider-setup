@@ -120,13 +120,13 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 
 	imageName = "test/" + randomString(10)
 	t.Logf("Building image %s", imageName)
+
 	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
 		Tags:           []string{imageName},
 		Dockerfile:     "Dockerfile",
 		Remove:         true,
 		SuppressOutput: false,
 	})
-
 	if err != nil {
 		return "", fmt.Errorf("failed to build image: %w", err)
 	}
@@ -183,7 +183,6 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 		},
 		Privileged: true,
 	}, nil, nil, "")
-
 	if err != nil {
 		return -1, nil, fmt.Errorf("failed to create container: %w", err)
 	}
@@ -201,7 +200,6 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 
 		return err
 	}, retry.Attempts(60), retry.Delay(1*time.Second))
-
 	if err != nil {
 		return -1, nil, fmt.Errorf("failed to connect to container: %w", err)
 	}

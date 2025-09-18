@@ -78,6 +78,7 @@ func (aptPackages *aptPackagesResource) Configure(_ context.Context, _ resource.
 
 func (aptPackages *aptPackagesResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan aptPackagesResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -159,6 +160,7 @@ func (aptPackages *aptPackagesResource) Read(_ context.Context, _ resource.ReadR
 
 func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var oldModel aptPackagesResourceModel
+
 	diags := req.State.Get(ctx, &oldModel)
 	resp.Diagnostics.Append(diags...)
 
@@ -167,6 +169,7 @@ func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource
 	}
 
 	var newModel aptPackagesResourceModel
+
 	diags = req.Plan.Get(ctx, &newModel)
 	resp.Diagnostics.Append(diags...)
 
@@ -267,6 +270,7 @@ func (aptPackages *aptPackagesResource) Update(ctx context.Context, req resource
 
 func (aptPackages *aptPackagesResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var plan aptPackagesResourceModel
+
 	diags := req.State.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
