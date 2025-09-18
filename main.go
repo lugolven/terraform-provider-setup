@@ -30,7 +30,6 @@ func main() {
 	}
 
 	err := providerserver.Serve(context.Background(), provider.NewProvider(), opts)
-
 	if err != nil {
 		log.Fatal(err.Error())
 	}

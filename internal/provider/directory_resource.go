@@ -71,6 +71,7 @@ func (directory *directoryResource) Configure(_ context.Context, _ resource.Conf
 
 func (directory *directoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan directoryResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -95,6 +96,7 @@ func (directory *directoryResource) Create(ctx context.Context, req resource.Cre
 
 func (directory *directoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model directoryResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -141,6 +143,7 @@ func (directory *directoryResource) Read(ctx context.Context, req resource.ReadR
 
 func (directory *directoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan directoryResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -172,6 +175,7 @@ func (directory *directoryResource) Update(ctx context.Context, req resource.Upd
 
 func (directory *directoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model directoryResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 

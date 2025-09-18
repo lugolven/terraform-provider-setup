@@ -74,6 +74,7 @@ func (p *internalProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 
 func (p *internalProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data providerData
+
 	diags := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 

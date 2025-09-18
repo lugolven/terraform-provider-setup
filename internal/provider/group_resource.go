@@ -63,6 +63,7 @@ func (group *groupResource) Configure(_ context.Context, _ resource.ConfigureReq
 
 func (group *groupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan groupResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -93,6 +94,7 @@ func (group *groupResource) Create(ctx context.Context, req resource.CreateReque
 
 func (group *groupResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model groupResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -101,7 +103,6 @@ func (group *groupResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 
 	gid, err := group.getGid(ctx, model.Name)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get gid  "+err.Error(), err.Error())
 		return
@@ -120,6 +121,7 @@ func (group *groupResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 func (group *groupResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var oldModel groupResourceModel
+
 	diags := req.State.Get(ctx, &oldModel)
 	resp.Diagnostics.Append(diags...)
 
@@ -128,6 +130,7 @@ func (group *groupResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	var newModel groupResourceModel
+
 	diags = req.Plan.Get(ctx, &newModel)
 	resp.Diagnostics.Append(diags...)
 
@@ -156,6 +159,7 @@ func (group *groupResource) Update(ctx context.Context, req resource.UpdateReque
 
 func (group *groupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model groupResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -193,8 +197,8 @@ func (group *groupResource) getGid(ctx context.Context, inputName types.String) 
 
 		if lineParts[0] == name {
 			stringID := lineParts[2]
-			id, err := strconv.ParseInt(stringID, 10, 64)
 
+			id, err := strconv.ParseInt(stringID, 10, 64)
 			if err != nil {
 				return 0, fmt.Errorf("failed to parse gid ('%s'): %w", stringID, err)
 			}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,27 +104,31 @@ func CreateSSHKey(t *testing.T, keyPath string) error {
 	return nil
 }
 
-// StartDockerSSHServer starts a new docker container with an ssh server that accepts the given public key.
-func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPath string) (port int, stop func(), err error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return -1, nil, err
+var imageName = ""
+
+var buildDockerImageLock = sync.Mutex{}
+
+func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
+	buildDockerImageLock.Lock()
+	defer buildDockerImageLock.Unlock()
+
+	if imageName != "" {
+		return imageName, nil
 	}
 
 	buildCtx := bytes.NewBuffer(testServerTar)
 
-	ctx := context.Background()
-	imageName := "test/" + randomString(10)
+	imageName = "test/" + randomString(10)
 	t.Logf("Building image %s", imageName)
-	buildResponse, err := cli.ImageBuild(ctx, buildCtx, types.ImageBuildOptions{
+
+	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
 		Tags:           []string{imageName},
 		Dockerfile:     "Dockerfile",
 		Remove:         true,
 		SuppressOutput: false,
 	})
-
 	if err != nil {
-		return -1, nil, fmt.Errorf("failed to build image: %w", err)
+		return "", fmt.Errorf("failed to build image: %w", err)
 	}
 
 	defer buildResponse.Body.Close()
@@ -135,8 +140,23 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 		}
 
 		if err != nil {
-			return -1, nil, fmt.Errorf("failed to read build response: %w", err)
+			return "", fmt.Errorf("failed to read build response: %w", err)
 		}
+	}
+
+	return imageName, nil
+}
+
+// StartDockerSSHServer starts a new docker container with an ssh server that accepts the given public key.
+func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPath string) (port int, stop func(), err error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return -1, nil, err
+	}
+
+	imageName, err := buildDockerImage(t, cli)
+	if err != nil {
+		return -1, nil, fmt.Errorf("failed to build the image: %w", err)
 	}
 
 	keyContent, err := os.ReadFile(authorizedKeysPath) // #nosec G304 - this is only used for testing
@@ -149,7 +169,7 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 		return -1, nil, fmt.Errorf("failed to get free port: %w", err)
 	}
 
-	containerResponse, err := cli.ContainerCreate(ctx, &container.Config{
+	containerResponse, err := cli.ContainerCreate(t.Context(), &container.Config{
 		Image: imageName,
 		Cmd:   []string{string(keyContent)},
 	}, &container.HostConfig{
@@ -161,16 +181,13 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 				},
 			},
 		},
-		Binds: []string{
-			"/var/run/docker.sock:/var/run/docker.sock",
-		},
+		Privileged: true,
 	}, nil, nil, "")
-
 	if err != nil {
 		return -1, nil, fmt.Errorf("failed to create container: %w", err)
 	}
 
-	if err := cli.ContainerStart(ctx, containerResponse.ID, container.StartOptions{}); err != nil {
+	if err := cli.ContainerStart(t.Context(), containerResponse.ID, container.StartOptions{}); err != nil {
 		return -1, nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -179,14 +196,10 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 	err = retry.Do(func() error {
 		t.Log("Trying to connect to the container via ssh")
 
-		if _, err := sshClientBuilder.Build(t.Context()); err != nil {
-			t.Log("Failed to connect ot the container via ssh")
-			return err
-		}
+		_, err := sshClientBuilder.Build(t.Context())
 
-		return nil
+		return err
 	}, retry.Attempts(60), retry.Delay(1*time.Second))
-
 	if err != nil {
 		return -1, nil, fmt.Errorf("failed to connect to container: %w", err)
 	}
@@ -194,37 +207,38 @@ func StartDockerSSHServer(t *testing.T, authorizedKeysPath string, privateKeyPat
 	t.Log("Was able to connect to the container via ssh, container is ready.")
 
 	go func() {
+		ctx := context.Background()
+
 		logs, err := cli.ContainerLogs(ctx, containerResponse.ID, container.LogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
 			Follow:     true,
 		})
 		if err != nil {
-			fmt.Printf("Copy error: %v", err)
+			t.Logf("Copy error: %v", err)
+			return
 		}
 		defer logs.Close()
 
-		prefixer := NewPrefixer(os.Stdout, func() string {
+		prefixer := NewPrefixer(t.Output(), func() string {
 			return fmt.Sprintf("[%s] ", imageName)
 		})
 		defer prefixer.EnsureNewline()
 
 		if _, err := io.Copy(prefixer, logs); err != nil {
-			fmt.Printf("Copy error: %v", err)
+			t.Logf("Copy error: %v", err)
 		}
 	}()
 
 	return port, func() {
+		ctx := context.Background()
+
 		if err := cli.ContainerStop(ctx, containerResponse.ID, container.StopOptions{}); err != nil {
 			t.Fatalf("failed to stop container: %v", err)
 		}
 
 		if err := cli.ContainerRemove(ctx, containerResponse.ID, container.RemoveOptions{}); err != nil {
 			t.Fatalf("failed to remove container: %v", err)
-		}
-
-		if _, err := cli.ImageRemove(ctx, imageName, types.ImageRemoveOptions{}); err != nil {
-			t.Fatalf("failed to remove image: %v", err)
 		}
 	}, nil
 }

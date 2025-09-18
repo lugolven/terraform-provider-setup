@@ -3,12 +3,15 @@ package clients
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"path/filepath"
+	"sync"
 
 	"os"
 
 	scp "github.com/bramvdbogaerde/go-scp"
+	dockerClient "github.com/docker/docker/client"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
@@ -55,8 +58,8 @@ func (builder *sshMachineAccessClientBuilder) buildAuthMethod() ([]ssh.AuthMetho
 		}
 
 		sshAgentClient := agent.NewClient(sshAgent)
-		signers, err := sshAgentClient.Signers()
 
+		signers, err := sshAgentClient.Signers()
 		if err != nil {
 			return nil, errors.Wrap(err, "couldn't get signers from ssh-agent")
 		}
@@ -91,13 +94,16 @@ func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (Machin
 
 	addr := fmt.Sprintf("%v:%v", builder.host, builder.port)
 	tflog.Debug(ctx, "Dialing "+addr)
-	conn, err := ssh.Dial("tcp", addr, sshConfig)
 
+	conn, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
 
-	return &sshMachineAccessClient{conn}, nil
+	return &sshMachineAccessClient{
+		Client:             conn,
+		dockerClientLocker: &sync.Mutex{},
+	}, nil
 }
 
 func publicKeyFile(file string) (ssh.AuthMethod, error) {
@@ -121,18 +127,21 @@ func publicKeyFile(file string) (ssh.AuthMethod, error) {
 
 type sshMachineAccessClient struct {
 	*ssh.Client
+	dockerClient       *dockerClient.Client
+	dockerClientLocker sync.Locker
+	dockerClientErr    error
 }
 
-func (client *sshMachineAccessClient) RunCommand(ctx context.Context, command string) (string, error) {
-	session, err := client.NewSession()
+func (sshClient *sshMachineAccessClient) RunCommand(ctx context.Context, command string) (string, error) {
+	session, err := sshClient.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
 
 	tflog.Debug(ctx, "Running command: "+command)
-	out, err := session.CombinedOutput(command)
 
+	out, err := session.CombinedOutput(command)
 	if err != nil {
 		if exitErr, ok := err.(*ssh.ExitError); ok {
 			return string(out), ExitError{
@@ -146,8 +155,8 @@ func (client *sshMachineAccessClient) RunCommand(ctx context.Context, command st
 	return string(out), nil
 }
 
-func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string, mode string, owner string, group string, content string) error {
-	scpClient, err := scp.NewClientBySSH(client.Client)
+func (sshClient *sshMachineAccessClient) WriteFile(ctx context.Context, path string, mode string, owner string, group string, content string) error {
+	scpClient, err := scp.NewClientBySSH(sshClient.Client)
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session from existing connection.\n %w", err)
 	}
@@ -180,19 +189,19 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 	}
 
 	// move the file to the correct location
-	_, err = client.RunCommand(ctx, "sudo mv "+remoteTmpFile.Name()+" "+path)
+	_, err = sshClient.RunCommand(ctx, "sudo mv "+remoteTmpFile.Name()+" "+path)
 	if err != nil {
 		return err
 	}
 
 	// set the owner and group of the remote file
-	out, err := client.RunCommand(ctx, "sudo chown "+owner+":"+group+" "+path)
+	out, err := sshClient.RunCommand(ctx, "sudo chown "+owner+":"+group+" "+path)
 	if err != nil {
 		return fmt.Errorf("failed to set owner and group: %s", out)
 	}
 
 	// set the mode of the remote file
-	out, err = client.RunCommand(ctx, "sudo chmod "+mode+" "+path)
+	out, err = sshClient.RunCommand(ctx, "sudo chmod "+mode+" "+path)
 	if err != nil {
 		return fmt.Errorf("failed to set mode: %s", out)
 	}
@@ -200,8 +209,8 @@ func (client *sshMachineAccessClient) WriteFile(ctx context.Context, path string
 	return nil
 }
 
-func (client *sshMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
-	scpClient, err := scp.NewClientBySSH(client.Client)
+func (sshClient *sshMachineAccessClient) CopyFile(ctx context.Context, localPath string, remotePath string) error {
+	scpClient, err := scp.NewClientBySSH(sshClient.Client)
 	if err != nil {
 		return fmt.Errorf("error creating new SSH session from existing connection: %w", err)
 	}
@@ -220,4 +229,118 @@ func (client *sshMachineAccessClient) CopyFile(ctx context.Context, localPath st
 	}
 
 	return nil
+}
+
+func (sshClient *sshMachineAccessClient) GetDockerClient(ctx context.Context) (*dockerClient.Client, error) {
+	sshClient.dockerClientLocker.Lock()
+
+	if sshClient.dockerClient == nil || sshClient.dockerClientErr != nil {
+		sshClient.dockerClient, sshClient.dockerClientErr = sshClient.createDockerClient(ctx)
+	}
+
+	sshClient.dockerClientLocker.Unlock()
+
+	return sshClient.dockerClient, sshClient.dockerClientErr
+}
+
+func (sshClient *sshMachineAccessClient) createDockerClient(ctx context.Context) (*dockerClient.Client, error) {
+	// Start SSH port forwarding in the background
+	localPort, cleanup, err := sshClient.startSSHPortForwarding(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start SSH port forwarding: %v", err)
+	}
+
+	// Create Docker client that connects to the local forwarded port
+	dockerClient, err := dockerClient.NewClientWithOpts(
+		dockerClient.WithHost(fmt.Sprintf("tcp://localhost:%d", localPort)),
+		dockerClient.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("failed to create Docker client: %v", err)
+	}
+
+	// Store cleanup function for later use (when provider is destroyed)
+	// For now, we'll let it run for the lifetime of the provider
+	_ = cleanup
+
+	return dockerClient, nil
+}
+
+func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Context) (localPort int, cleanup func(), err error) {
+	// Listen on a random local port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create local listener: %v", err)
+	}
+
+	localAddr := listener.Addr().(*net.TCPAddr)
+	localPort = localAddr.Port
+
+	// Channel to signal when to stop forwarding
+	done := make(chan struct{})
+	cleanup = func() {
+		close(done)
+		listener.Close()
+	}
+
+	// Connect to Docker daemon on the remote host (default Docker socket)
+	remoteConn, err := sshClient.Dial("unix", "/var/run/docker.sock")
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket: %v", err))
+		return -1, nil, fmt.Errorf("could not dial /var/run/docker.sock. err=%w", err)
+	}
+
+	// Start forwarding in a goroutine
+	go func() {
+		defer listener.Close()
+
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				// Accept incoming connections
+				localConn, err := listener.Accept()
+				if err != nil {
+					// Check if we're shutting down
+					select {
+					case <-done:
+						return
+					default:
+						tflog.Error(ctx, fmt.Sprintf("Failed to accept local connection: %v", err))
+						continue
+					}
+				}
+
+				// Handle the connection in another goroutine
+				go sshClient.handlePortForward(ctx, localConn, remoteConn, done)
+			}
+		}
+	}()
+
+	return localPort, cleanup, nil
+}
+
+func (sshClient *sshMachineAccessClient) handlePortForward(_ context.Context, localConn net.Conn, remoteConn net.Conn, done <-chan struct{}) {
+	defer localConn.Close()
+	defer remoteConn.Close()
+
+	// Forward data between local and remote connections
+	go func() {
+		defer remoteConn.Close()
+		defer localConn.Close()
+
+		_, _ = io.Copy(remoteConn, localConn)
+	}()
+
+	go func() {
+		defer remoteConn.Close()
+		defer localConn.Close()
+
+		_, _ = io.Copy(localConn, remoteConn)
+	}()
+
+	// Wait for shutdown signal
+	<-done
 }

@@ -71,6 +71,7 @@ func (r *sshAddResource) Configure(_ context.Context, _ resource.ConfigureReques
 
 func (r *sshAddResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan sshAddResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -90,8 +91,8 @@ func (r *sshAddResource) Create(ctx context.Context, req resource.CreateRequest,
 	authorizedKeysDir := plan.AuthorizedKeysPath.ValueString()
 	if strings.Contains(authorizedKeysDir, "/") {
 		dirPath := authorizedKeysDir[:strings.LastIndex(authorizedKeysDir, "/")]
-		_, err := r.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("mkdir -p %s", dirPath))
 
+		_, err := r.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("mkdir -p %s", dirPath))
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to create authorized_keys directory", err.Error())
 			return
@@ -100,7 +101,6 @@ func (r *sshAddResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Check if the key already exists in the file
 	content, err := r.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("cat %s 2>/dev/null || echo ''", plan.AuthorizedKeysPath.ValueString()))
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to read authorized_keys file", err.Error())
 		return
@@ -153,6 +153,7 @@ func (r *sshAddResource) Create(ctx context.Context, req resource.CreateRequest,
 
 func (r *sshAddResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model sshAddResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -206,6 +207,7 @@ func (r *sshAddResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 func (r *sshAddResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan sshAddResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -214,6 +216,7 @@ func (r *sshAddResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	var state sshAddResourceModel
+
 	diags = req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -242,8 +245,8 @@ func (r *sshAddResource) Update(ctx context.Context, req resource.UpdateRequest,
 		authorizedKeysDir := plan.AuthorizedKeysPath.ValueString()
 		if strings.Contains(authorizedKeysDir, "/") {
 			dirPath := authorizedKeysDir[:strings.LastIndex(authorizedKeysDir, "/")]
-			_, err := r.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("mkdir -p %s", dirPath))
 
+			_, err := r.provider.machineAccessClient.RunCommand(ctx, fmt.Sprintf("mkdir -p %s", dirPath))
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to create authorized_keys directory", err.Error())
 				return
@@ -288,6 +291,7 @@ func (r *sshAddResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 func (r *sshAddResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model sshAddResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 

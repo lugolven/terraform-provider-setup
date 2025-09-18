@@ -78,6 +78,7 @@ func (r *sshKeyResource) Configure(_ context.Context, _ resource.ConfigureReques
 
 func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan sshKeyResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -113,7 +114,6 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Generate the SSH key
 	_, err := r.provider.machineAccessClient.RunCommand(ctx, cmd.String())
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to generate SSH key", err.Error())
 		return
@@ -121,8 +121,8 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// Read the public key
 	publicKeyPath := plan.Path.ValueString() + ".pub"
-	publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
 
+	publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to read public key", err.Error())
 		return
@@ -143,6 +143,7 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model sshKeyResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -152,7 +153,6 @@ func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Check if private key exists
 	_, err := r.provider.machineAccessClient.RunCommand(ctx, "test -f "+model.Path.ValueString())
-
 	if err != nil {
 		// If private key doesn't exist, remove from state
 		resp.State.RemoveResource(ctx)
@@ -161,8 +161,8 @@ func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Read the public key
 	publicKeyPath := model.Path.ValueString() + ".pub"
-	publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
 
+	publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
 	if err != nil {
 		// If public key doesn't exist, remove from state
 		resp.State.RemoveResource(ctx)
@@ -181,6 +181,7 @@ func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan sshKeyResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -189,6 +190,7 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	var state sshKeyResourceModel
+
 	diags = req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -229,7 +231,6 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 		// Generate the SSH key
 		_, err := r.provider.machineAccessClient.RunCommand(ctx, cmd.String())
-
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to generate SSH key", err.Error())
 			return
@@ -237,8 +238,8 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 		// Read the public key
 		publicKeyPath := plan.Path.ValueString() + ".pub"
-		publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
 
+		publicKeyContent, err := r.provider.machineAccessClient.RunCommand(ctx, "cat "+publicKeyPath)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to read public key", err.Error())
 			return
@@ -260,6 +261,7 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 func (r *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model sshKeyResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 

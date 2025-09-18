@@ -80,6 +80,7 @@ func (aptRepository *aptRepositoryResource) Configure(_ context.Context, req res
 
 func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan aptRepositoryResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -112,7 +113,7 @@ func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req reso
 		return
 	}
 
-	arch := strings.Replace(string(archResponse), "\n", "", -1)
+	arch := strings.ReplaceAll(string(archResponse), "\n", "")
 
 	// 4. Get the flavor of the system by running `lsb_release -cs` or `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`
 	flavorResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
@@ -121,7 +122,7 @@ func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req reso
 		return
 	}
 
-	flavor := strings.Replace(string(flavorResponse), "\n", "", -1)
+	flavor := strings.ReplaceAll(string(flavorResponse), "\n", "")
 
 	// 5. Add the repository to /etc/apt/sources.list.d/<name>.list with the following content:
 	// 	echo \
@@ -158,6 +159,7 @@ func (aptRepository *aptRepositoryResource) Create(ctx context.Context, req reso
 
 func (aptRepository *aptRepositoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state aptRepositoryResourceModel
+
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -167,8 +169,8 @@ func (aptRepository *aptRepositoryResource) Read(ctx context.Context, req resour
 
 	// Check if the repository key file exists
 	keyPath := "/etc/apt/keyrings/" + state.Name.ValueString() + ".asc"
-	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "test -f "+keyPath)
 
+	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "test -f "+keyPath)
 	if err != nil {
 		// Key file doesn't exist, remove from state
 		resp.State.RemoveResource(ctx)
@@ -177,8 +179,8 @@ func (aptRepository *aptRepositoryResource) Read(ctx context.Context, req resour
 
 	// Check if the repository source list exists
 	sourceListPath := "/etc/apt/sources.list.d/" + state.Name.ValueString() + ".list"
-	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "test -f "+sourceListPath)
 
+	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "test -f "+sourceListPath)
 	if err != nil {
 		// Source list doesn't exist, remove from state
 		resp.State.RemoveResource(ctx)
@@ -192,6 +194,7 @@ func (aptRepository *aptRepositoryResource) Read(ctx context.Context, req resour
 
 func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan aptRepositoryResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -200,6 +203,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 	}
 
 	var state aptRepositoryResourceModel
+
 	diags = req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -211,16 +215,16 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 	if !plan.Name.Equal(state.Name) {
 		// Remove old key file
 		oldKeyPath := "/etc/apt/keyrings/" + state.Name.ValueString() + ".asc"
-		_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+oldKeyPath)
 
+		_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+oldKeyPath)
 		if err != nil {
 			resp.Diagnostics.AddWarning("Failed to remove old key file", err.Error())
 		}
 
 		// Remove old source list
 		oldSourceListPath := "/etc/apt/sources.list.d/" + state.Name.ValueString() + ".list"
-		_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+oldSourceListPath)
 
+		_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+oldSourceListPath)
 		if err != nil {
 			resp.Diagnostics.AddWarning("Failed to remove old source list", err.Error())
 		}
@@ -240,7 +244,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		return
 	}
 
-	arch := strings.Replace(string(archResponse), "\n", "", -1)
+	arch := strings.ReplaceAll(string(archResponse), "\n", "")
 
 	flavorResponse, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, `. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"`)
 	if err != nil {
@@ -248,7 +252,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 		return
 	}
 
-	flavor := strings.Replace(string(flavorResponse), "\n", "", -1)
+	flavor := strings.ReplaceAll(string(flavorResponse), "\n", "")
 
 	// Update the repository source list
 	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, `echo "deb [arch=`+arch+` signed-by=/etc/apt/keyrings/`+plan.Name.ValueString()+`.asc] `+plan.URL.ValueString()+` `+flavor+` stable" | sudo tee /etc/apt/sources.list.d/`+plan.Name.ValueString()+`.list > /dev/null`)
@@ -263,6 +267,7 @@ func (aptRepository *aptRepositoryResource) Update(ctx context.Context, req reso
 
 func (aptRepository *aptRepositoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state aptRepositoryResourceModel
+
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
@@ -272,16 +277,16 @@ func (aptRepository *aptRepositoryResource) Delete(ctx context.Context, req reso
 
 	// Remove the key file
 	keyPath := "/etc/apt/keyrings/" + state.Name.ValueString() + ".asc"
-	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+keyPath)
 
+	_, err := aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+keyPath)
 	if err != nil {
 		resp.Diagnostics.AddWarning("Failed to remove key file", err.Error())
 	}
 
 	// Remove the source list file
 	sourceListPath := "/etc/apt/sources.list.d/" + state.Name.ValueString() + ".list"
-	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+sourceListPath)
 
+	_, err = aptRepository.provider.machineAccessClient.RunCommand(ctx, "sudo rm -f "+sourceListPath)
 	if err != nil {
 		resp.Diagnostics.AddWarning("Failed to remove source list file", err.Error())
 	}

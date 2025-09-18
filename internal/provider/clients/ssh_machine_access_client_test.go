@@ -75,13 +75,13 @@ func TestSshRunCommand(t *testing.T) {
 
 		err = retry.Do(func() error {
 			var dialErr error
+
 			client, dialErr = CreateSSHMachineAccessClientBuilder("test", "localhost", port).WithAgent(socket).Build(t.Context())
 
 			log.Println("Trying to dial...")
 
 			return dialErr
 		}, retry.Attempts(5), retry.Delay(1*time.Second))
-
 		if err != nil {
 			t.Fatal(err)
 		}

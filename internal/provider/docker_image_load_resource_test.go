@@ -6,8 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +34,24 @@ func TestDockerImageLoadResource(t *testing.T) {
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t),
+					Check: resource.ComposeTestCheckFunc(
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return err
+							}
+
+							out, err := sshClient.RunCommand(context.Background(), "docker version")
+							if err != nil {
+								return fmt.Errorf("docker version failed %w, \nout:\n%s", err, out)
+							}
+
+							return nil
+						},
+					),
+				},
 				{
 					Config: testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + testDockerImageLoadResourceConfig(tarFile),
 					Check: resource.ComposeTestCheckFunc(
@@ -206,7 +222,7 @@ func TestGetImageContentHashFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		contentHash, err := resource.getImageContentHashFromLocalTar(tarFile)
+		contentHash, err := resource.getImageContentHashFromLocalTar(t.Context(), tarFile)
 
 		// Assert
 		if err != nil {
@@ -244,8 +260,8 @@ func TestGetImageContentHashFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		contentHash1, err1 := resource.getImageContentHashFromLocalTar(tarFile1)
-		contentHash2, err2 := resource.getImageContentHashFromLocalTar(tarFile2)
+		contentHash1, err1 := resource.getImageContentHashFromLocalTar(t.Context(), tarFile1)
+		contentHash2, err2 := resource.getImageContentHashFromLocalTar(t.Context(), tarFile2)
 
 		// Assert
 		if err1 != nil {
@@ -284,8 +300,8 @@ func TestGetImageContentHashFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		contentHash1, err1 := resource.getImageContentHashFromLocalTar(tarFile1)
-		contentHash2, err2 := resource.getImageContentHashFromLocalTar(tarFile2)
+		contentHash1, err1 := resource.getImageContentHashFromLocalTar(t.Context(), tarFile1)
+		contentHash2, err2 := resource.getImageContentHashFromLocalTar(t.Context(), tarFile2)
 
 		// Assert
 		if err1 != nil {
@@ -306,7 +322,7 @@ func TestGetImageContentHashFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		_, err := resource.getImageContentHashFromLocalTar("/nonexistent/file.tar")
+		_, err := resource.getImageContentHashFromLocalTar(t.Context(), "/nonexistent/file.tar")
 
 		// Assert
 		if err == nil {
@@ -330,7 +346,7 @@ func TestGetImageContentHashFromLocalTar(t *testing.T) {
 		resource := &dockerImageLoadResource{}
 
 		// Act
-		_, err = resource.getImageContentHashFromLocalTar(invalidTarFile)
+		_, err = resource.getImageContentHashFromLocalTar(t.Context(), invalidTarFile)
 
 		// Assert
 		if err == nil {
@@ -341,49 +357,13 @@ func TestGetImageContentHashFromLocalTar(t *testing.T) {
 
 func testDockerSetupConfig(t *testing.T) string {
 	t.Helper()
-	// Download Docker GPG key dynamically
-	// #nosec G107 - This is a test function using trusted Docker GPG key URL
-	resp, err := http.Get("https://download.docker.com/linux/ubuntu/gpg")
-	if err != nil {
-		t.Fatalf("Failed to download Docker GPG key: %v", err)
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to download Docker GPG key: HTTP %d", resp.StatusCode)
-	}
-
-	keyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read Docker GPG key: %v", err)
-	}
-
-	dockerGpgKey := string(keyBytes)
-
-	return fmt.Sprintf(`
-resource "setup_apt_repository" "docker" {
-  name = "docker"
-  key  = <<EOT
-%s
-EOT
-  url  = "https://download.docker.com/linux/ubuntu"
-}
-
-resource "setup_apt_packages" "docker_packages" {
-  depends_on = [setup_apt_repository.docker]
-  
-  package {
-    name = "docker-ce"
-    absent = false
-  }
-}
-`, dockerGpgKey)
+	return ""
 }
 
 func testDockerImageLoadResourceConfig(tarFile string) string {
 	return fmt.Sprintf(`
 resource "setup_docker_image_load" "test" {
-  depends_on = [setup_apt_packages.docker_packages]
   tar_file = "%s"
 }
 `, tarFile)
@@ -395,8 +375,8 @@ func createTestDockerImageTar(tarFile string) error {
 
 func createTestDockerImageTarWithContent(tarFile, content string) error {
 	cleanPath := filepath.Clean(tarFile)
-	file, err := os.Create(cleanPath)
 
+	file, err := os.Create(cleanPath)
 	if err != nil {
 		return err
 	}
@@ -412,6 +392,7 @@ func createTestDockerImageTarWithContent(tarFile, content string) error {
 
 	// Create a proper layer tar file first
 	var layerBuf bytes.Buffer
+
 	layerTarWriter := tar.NewWriter(&layerBuf)
 
 	// Add a simple file to the layer

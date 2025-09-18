@@ -70,6 +70,7 @@ func (user *userResource) Configure(_ context.Context, _ resource.ConfigureReque
 
 func (user *userResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan userResourceModel
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -115,6 +116,7 @@ func (user *userResource) Create(ctx context.Context, req resource.CreateRequest
 
 func (user *userResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var model userResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -123,7 +125,6 @@ func (user *userResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	uid, err := user.getUID(ctx, model.Name)
-
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get uid  "+err.Error(), err.Error())
 		return
@@ -142,6 +143,7 @@ func (user *userResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 func (user *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var oldModel userResourceModel
+
 	diags := req.State.Get(ctx, &oldModel)
 	resp.Diagnostics.Append(diags...)
 
@@ -150,6 +152,7 @@ func (user *userResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	var newModel userResourceModel
+
 	diags = req.Plan.Get(ctx, &newModel)
 	resp.Diagnostics.Append(diags...)
 
@@ -234,6 +237,7 @@ func (user *userResource) Update(ctx context.Context, req resource.UpdateRequest
 
 func (user *userResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var model userResourceModel
+
 	diags := req.State.Get(ctx, &model)
 	resp.Diagnostics.Append(diags...)
 
@@ -271,8 +275,8 @@ func (user *userResource) getUID(ctx context.Context, inputName types.String) (i
 
 		if lineParts[0] == name {
 			stringID := lineParts[2]
-			id, err := strconv.ParseInt(stringID, 10, 64)
 
+			id, err := strconv.ParseInt(stringID, 10, 64)
 			if err != nil {
 				return 0, fmt.Errorf("failed to parse uid ('%s'): %w", stringID, err)
 			}
