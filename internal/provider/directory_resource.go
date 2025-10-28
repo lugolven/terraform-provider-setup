@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -65,6 +66,7 @@ func (directory *directoryResource) Schema(_ context.Context, _ resource.SchemaR
 			"remove_on_deletion": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
+				Default:     booldefault.StaticBool(false),
 				Description: "Whether to remove the directory when the resource is deleted. Defaults to false.",
 			},
 		},

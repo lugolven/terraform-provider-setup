@@ -84,9 +84,9 @@ func TestDirectoryResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testDirectoryResourceConfig("/tmp/testdir2", "755", 0, 0, true),
+					Config: testProviderConfig(setup, "test", "localhost") + testDirectoryResourceConfig("/tmp/testdir", "755", 0, 0, true),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_directory.dir", "path", "/tmp/testdir2"),
+						resource.TestCheckResourceAttr("setup_directory.dir", "path", "/tmp/testdir"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "mode", "755"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_directory.dir", "group", "0"),
@@ -97,7 +97,7 @@ func TestDirectoryResource(t *testing.T) {
 								return err
 							}
 
-							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/testdir2")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/testdir")
 							if err != nil {
 								return err
 							}
@@ -120,12 +120,12 @@ func TestDirectoryResource(t *testing.T) {
 							}
 
 							// check that the directory was deleted
-							out, err := sshClient.RunCommand(context.Background(), "ls /tmp/testdir2")
+							out, err := sshClient.RunCommand(context.Background(), "ls /tmp/testdir")
 							if err == nil {
 								return fmt.Errorf("directory was not deleted")
 							}
 
-							if out != "ls: cannot access '/tmp/testdir2': No such file or directory\n" {
+							if out != "ls: cannot access '/tmp/testdir': No such file or directory\n" {
 								return fmt.Errorf("unexpected output: %s", out)
 							}
 
