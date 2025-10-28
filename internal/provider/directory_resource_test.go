@@ -13,7 +13,7 @@ import (
 func TestDirectoryResource(t *testing.T) {
 	const expectedStat = "root root 755\n"
 
-	t.Run("Test create and delete without remove_on_deletion flag", func(t *testing.T) {
+	t.Run("Test default remove_on_deletion value is false", func(t *testing.T) {
 		// Arrange
 		setup := setupTestEnvironment(t)
 
@@ -137,7 +137,7 @@ func TestDirectoryResource(t *testing.T) {
 		})
 	})
 
-	t.Run("Test default remove_on_deletion value is false", func(t *testing.T) {
+	t.Run("Test create and delete without remove_on_deletion flag", func(t *testing.T) {
 		// Arrange
 		setup := setupTestEnvironment(t)
 
