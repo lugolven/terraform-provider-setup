@@ -13,18 +13,18 @@ import (
 )
 
 func TestSshKeyResource(t *testing.T) {
-	t.Run("Test create RSA SSH key", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
+	// Arrange - set up a single Docker container for all test cases
+	setup := setupTestEnvironment(t)
 
+	t.Run("Test create RSA SSH key", func(t *testing.T) {
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testSSHKeyResourceConfig("/tmp/test_ssh_key", "rsa", 2048),
+					Config: testProviderConfig(setup, "test", "localhost") + testSSHKeyResourceConfig("/tmp/test_ssh_key_rsa", "rsa", 2048),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_ssh_key.test", "path", "/tmp/test_ssh_key"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "path", "/tmp/test_ssh_key_rsa"),
 						resource.TestCheckResourceAttr("setup_ssh_key.test", "key_type", "rsa"),
 						resource.TestCheckResourceAttr("setup_ssh_key.test", "key_size", "2048"),
 						resource.TestMatchResourceAttr("setup_ssh_key.test", "public_key", regexp.MustCompile("^ssh-rsa AAAA")),
@@ -35,12 +35,12 @@ func TestSshKeyResource(t *testing.T) {
 							}
 
 							// Check that both private and public key files exist
-							_, err = sshClient.RunCommand(context.Background(), "test -f /tmp/test_ssh_key")
+							_, err = sshClient.RunCommand(context.Background(), "test -f /tmp/test_ssh_key_rsa")
 							if err != nil {
 								return fmt.Errorf("private key file not found")
 							}
 
-							_, err = sshClient.RunCommand(context.Background(), "test -f /tmp/test_ssh_key.pub")
+							_, err = sshClient.RunCommand(context.Background(), "test -f /tmp/test_ssh_key_rsa.pub")
 							if err != nil {
 								return fmt.Errorf("public key file not found")
 							}
@@ -54,9 +54,6 @@ func TestSshKeyResource(t *testing.T) {
 	})
 
 	t.Run("Test create ed25519 SSH key", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
-
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
@@ -92,9 +89,6 @@ func TestSshKeyResource(t *testing.T) {
 	})
 
 	t.Run("Test SSH key with defaults", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
-
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
