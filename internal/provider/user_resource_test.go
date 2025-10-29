@@ -12,10 +12,10 @@ import (
 )
 
 func TestUserResource(t *testing.T) {
-	t.Run("Test create, update and removed", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
+	// Arrange - set up a single Docker container for all test cases
+	setup := setupTestEnvironment(t)
 
+	t.Run("Test create, update and removed", func(t *testing.T) {
 		var firstUserGid string
 
 		// Act & assert
@@ -23,9 +23,9 @@ func TestUserResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("testuser", "testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("testuser_create_update", "testgroup_create_update"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser_create_update"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
@@ -37,7 +37,7 @@ func TestUserResource(t *testing.T) {
 								return err
 							}
 
-							if !strings.Contains(content, "testuser") {
+							if !strings.Contains(content, "testuser_create_update") {
 								return fmt.Errorf("user not found")
 							}
 
@@ -56,9 +56,9 @@ func TestUserResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("anotheruser", "testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("anotheruser_create_update", "testgroup_create_update"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_user.user", "name", "anotheruser"),
+						resource.TestCheckResourceAttr("setup_user.user", "name", "anotheruser_create_update"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
@@ -70,7 +70,7 @@ func TestUserResource(t *testing.T) {
 								return err
 							}
 
-							if !strings.Contains(content, "anotheruser") {
+							if !strings.Contains(content, "anotheruser_create_update") {
 								return fmt.Errorf("user not found")
 							}
 
@@ -97,17 +97,14 @@ func TestUserResource(t *testing.T) {
 	})
 
 	t.Run("Test with user already created", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
-
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("testuser", "testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfig("testuser_already_created", "testgroup_already_created"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser_already_created"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
@@ -119,7 +116,7 @@ func TestUserResource(t *testing.T) {
 								return err
 							}
 
-							if !strings.Contains(content, "testuser") {
+							if !strings.Contains(content, "testuser_already_created") {
 								return fmt.Errorf("user not found")
 							}
 
@@ -132,29 +129,26 @@ func TestUserResource(t *testing.T) {
 	})
 
 	t.Run("Test removing user from group", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
-
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfigWithGroups("testuser", []string{"testgroup", "othergroup"}),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfigWithGroups("testuser_remove_group", []string{"testgroup_remove_group_1", "testgroup_remove_group_2"}),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser_remove_group"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(context.Background(), "groups testuser")
+							content, err := sshClient.RunCommand(context.Background(), "groups testuser_remove_group")
 							if err != nil {
 								return err
 							}
 
-							if !strings.Contains(content, "testgroup") || !strings.Contains(content, "othergroup") {
+							if !strings.Contains(content, "testgroup_remove_group_1") || !strings.Contains(content, "testgroup_remove_group_2") {
 								return fmt.Errorf("user not in expected groups")
 							}
 
@@ -163,26 +157,26 @@ func TestUserResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfigWithGroups("testuser", []string{"testgroup"}),
+					Config: testProviderConfig(setup, "test", "localhost") + testUserResourceConfigWithGroups("testuser_remove_group", []string{"testgroup_remove_group_1"}),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser"),
+						resource.TestCheckResourceAttr("setup_user.user", "name", "testuser_remove_group"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(context.Background(), "groups testuser")
+							content, err := sshClient.RunCommand(context.Background(), "groups testuser_remove_group")
 							if err != nil {
 								return err
 							}
 
-							if !strings.Contains(content, "testgroup") {
-								return fmt.Errorf("user not in testgroup")
+							if !strings.Contains(content, "testgroup_remove_group_1") {
+								return fmt.Errorf("user not in testgroup_remove_group_1")
 							}
 
-							if strings.Contains(content, "othergroup") {
-								return fmt.Errorf("user still in othergroup")
+							if strings.Contains(content, "testgroup_remove_group_2") {
+								return fmt.Errorf("user still in testgroup_remove_group_2")
 							}
 
 							return nil

@@ -15,18 +15,18 @@ func TestFileResource(t *testing.T) {
 
 	const expectedContent = "hello\nworld\n"
 
-	t.Run("Test create, update and removed", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
+	// Arrange - set up a single Docker container for all test cases
+	setup := setupTestEnvironment(t)
 
+	t.Run("Test create, update and removed", func(t *testing.T) {
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test_create_update.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
+						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test_create_update.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
 						resource.TestCheckResourceAttr("setup_file.file", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
@@ -37,7 +37,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test_create_update.txt")
 							if err != nil {
 								return err
 							}
@@ -46,7 +46,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test_create_update.txt")
 							if err != nil {
 								return err
 							}
@@ -60,9 +60,9 @@ func TestFileResource(t *testing.T) {
 					),
 				},
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "world hello"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test_create_update.txt", "644", 0, 0, "world hello"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
+						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test_create_update.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
 						resource.TestCheckResourceAttr("setup_file.file", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
@@ -73,7 +73,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test_create_update.txt")
 							if err != nil {
 								return err
 							}
@@ -82,7 +82,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test_create_update.txt")
 							if err != nil {
 								return err
 							}
@@ -105,12 +105,12 @@ func TestFileResource(t *testing.T) {
 							}
 
 							// check that the file was deleted
-							out, err := sshClient.RunCommand(context.Background(), "ls /tmp/test.txt")
+							out, err := sshClient.RunCommand(context.Background(), "ls /tmp/test_create_update.txt")
 							if err == nil {
 								return fmt.Errorf("file was not deleted")
 							}
 
-							if out != "ls: cannot access '/tmp/test.txt': No such file or directory\n" {
+							if out != "ls: cannot access '/tmp/test_create_update.txt': No such file or directory\n" {
 								return fmt.Errorf("unexpected output: %s", out)
 							}
 
@@ -123,17 +123,14 @@ func TestFileResource(t *testing.T) {
 	})
 
 	t.Run("Test create, external change and update", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
-
 		// Act & assert
 		resource.Test(t, resource.TestCase{
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test_external_change.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
+						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test_external_change.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
 						resource.TestCheckResourceAttr("setup_file.file", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
@@ -144,7 +141,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test_external_change.txt")
 							if err != nil {
 								return err
 							}
@@ -153,7 +150,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test_external_change.txt")
 							if err != nil {
 								return err
 							}
@@ -173,14 +170,14 @@ func TestFileResource(t *testing.T) {
 							t.Fatal(err)
 						}
 
-						out, err := sshClient.RunCommand(context.Background(), "sudo sh -c \"echo 'world hello' > /tmp/test.txt\"")
+						out, err := sshClient.RunCommand(context.Background(), "sudo sh -c \"echo 'world hello' > /tmp/test_external_change.txt\"")
 						if err != nil {
 							t.Fatalf("failed to update file: %s\n %v", out, err)
 						}
 					},
-					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test.txt", "644", 0, 0, "hello\nworld"),
+					Config: testProviderConfig(setup, "test", "localhost") + testFileResourceConfig("/tmp/test_external_change.txt", "644", 0, 0, "hello\nworld"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test.txt"),
+						resource.TestCheckResourceAttr("setup_file.file", "path", "/tmp/test_external_change.txt"),
 						resource.TestCheckResourceAttr("setup_file.file", "mode", "644"),
 						resource.TestCheckResourceAttr("setup_file.file", "owner", "0"),
 						resource.TestCheckResourceAttr("setup_file.file", "group", "0"),
@@ -191,7 +188,7 @@ func TestFileResource(t *testing.T) {
 								return err
 							}
 
-							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test.txt")
+							content, err := sshClient.RunCommand(context.Background(), "cat /tmp/test_external_change.txt")
 							if err != nil {
 								return err
 							}
@@ -200,7 +197,7 @@ func TestFileResource(t *testing.T) {
 								return fmt.Errorf("unexpected content: %s", content)
 							}
 
-							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test.txt")
+							stat, err := sshClient.RunCommand(context.Background(), "stat -c '%U %G %a' /tmp/test_external_change.txt")
 							if err != nil {
 								return err
 							}

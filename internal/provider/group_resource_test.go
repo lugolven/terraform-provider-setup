@@ -12,10 +12,10 @@ import (
 )
 
 func TestGroupResource(t *testing.T) {
-	t.Run("Test create, update and removed", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
+	// Arrange - set up a single Docker container for all test cases
+	setup := setupTestEnvironment(t)
 
+	t.Run("Test create, update and removed", func(t *testing.T) {
 		var firstGroupGid string
 
 		// Act & assert
@@ -23,9 +23,9 @@ func TestGroupResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testGroupResourceConfig("testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testGroupResourceConfig("testgroup_create_update"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_group.group", "name", "testgroup"),
+						resource.TestCheckResourceAttr("setup_group.group", "name", "testgroup_create_update"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
@@ -37,7 +37,7 @@ func TestGroupResource(t *testing.T) {
 								return err
 							}
 
-							if !strings.Contains(content, "testgroup") {
+							if !strings.Contains(content, "testgroup_create_update") {
 								return fmt.Errorf("group not found")
 							}
 
@@ -57,9 +57,9 @@ func TestGroupResource(t *testing.T) {
 				},
 
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testGroupResourceConfig("anothergroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testGroupResourceConfig("anothergroup_create_update"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_group.group", "name", "anothergroup"),
+						resource.TestCheckResourceAttr("setup_group.group", "name", "anothergroup_create_update"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
@@ -71,11 +71,11 @@ func TestGroupResource(t *testing.T) {
 								return err
 							}
 
-							if !strings.Contains(content, "anothergroup") {
+							if !strings.Contains(content, "anothergroup_create_update") {
 								return fmt.Errorf("updated group not found")
 							}
 
-							if strings.Contains(content, "testgroup") {
+							if strings.Contains(content, "testgroup_create_update") {
 								return fmt.Errorf("old group found")
 							}
 
@@ -102,15 +102,12 @@ func TestGroupResource(t *testing.T) {
 	})
 
 	t.Run("Test already existing group", func(t *testing.T) {
-		// Arrange
-		setup := setupTestEnvironment(t)
-
 		sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, err = sshClient.RunCommand(context.Background(), "sudo groupadd testgroup")
+		_, err = sshClient.RunCommand(context.Background(), "sudo groupadd testgroup_already_existing")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,9 +117,9 @@ func TestGroupResource(t *testing.T) {
 			ProtoV6ProviderFactories: getTestProviderFactories(),
 			Steps: []resource.TestStep{
 				{
-					Config: testProviderConfig(setup, "test", "localhost") + testGroupResourceConfig("testgroup"),
+					Config: testProviderConfig(setup, "test", "localhost") + testGroupResourceConfig("testgroup_already_existing"),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_group.group", "name", "testgroup"),
+						resource.TestCheckResourceAttr("setup_group.group", "name", "testgroup_already_existing"),
 						func(_ *terraform.State) error {
 							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
 							if err != nil {
@@ -134,7 +131,7 @@ func TestGroupResource(t *testing.T) {
 								return err
 							}
 
-							if !strings.Contains(content, "testgroup") {
+							if !strings.Contains(content, "testgroup_already_existing") {
 								return fmt.Errorf("group not found")
 							}
 

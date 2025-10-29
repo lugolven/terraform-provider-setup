@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -30,10 +31,11 @@ type directoryResource struct {
 }
 
 type directoryResourceModel struct {
-	Path  types.String `tfsdk:"path"`
-	Mode  types.String `tfsdk:"mode"`
-	Owner types.Int64  `tfsdk:"owner"`
-	Group types.Int64  `tfsdk:"group"`
+	Path             types.String `tfsdk:"path"`
+	Mode             types.String `tfsdk:"mode"`
+	Owner            types.Int64  `tfsdk:"owner"`
+	Group            types.Int64  `tfsdk:"group"`
+	RemoveOnDeletion types.Bool   `tfsdk:"remove_on_deletion"`
 }
 
 func (directory *directoryResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -60,6 +62,12 @@ func (directory *directoryResource) Schema(_ context.Context, _ resource.SchemaR
 			"group": schema.Int64Attribute{
 				Required:    true,
 				Description: "The group of the directory",
+			},
+			"remove_on_deletion": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Whether to remove the directory when the resource is deleted. Defaults to false.",
 			},
 		},
 	}
@@ -183,10 +191,13 @@ func (directory *directoryResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	_, err := directory.provider.machineAccessClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to delete directory", err.Error())
-		return
+	// Only remove the directory if remove_on_deletion is explicitly set to true
+	if model.RemoveOnDeletion.ValueBool() {
+		_, err := directory.provider.machineAccessClient.RunCommand(ctx, "sudo rm -rf "+model.Path.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to delete directory", err.Error())
+			return
+		}
 	}
 }
 
