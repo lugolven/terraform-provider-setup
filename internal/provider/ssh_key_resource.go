@@ -39,6 +39,8 @@ type sshKeyResourceModel struct {
 	KeyType   types.String `tfsdk:"key_type"`
 	KeySize   types.Int64  `tfsdk:"key_size"`
 	PublicKey types.String `tfsdk:"public_key"`
+	Owner     types.String `tfsdk:"owner"`
+	Group     types.String `tfsdk:"group"`
 }
 
 func (r *sshKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -67,6 +69,14 @@ func (r *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"public_key": schema.StringAttribute{
 				Computed:    true,
 				Description: "The generated public key content",
+			},
+			"owner": schema.StringAttribute{
+				Optional:    true,
+				Description: "The owner (user) of the SSH key files. If not specified, the current user is used",
+			},
+			"group": schema.StringAttribute{
+				Optional:    true,
+				Description: "The group of the SSH key files. If not specified, the current group is used",
 			},
 		},
 	}
@@ -126,6 +136,34 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to read public key", err.Error())
 		return
+	}
+
+	// Set owner and group if specified
+	if !plan.Owner.IsNull() && !plan.Owner.IsUnknown() {
+		ownerStr := plan.Owner.ValueString()
+		groupStr := ""
+		if !plan.Group.IsNull() && !plan.Group.IsUnknown() {
+			groupStr = plan.Group.ValueString()
+		}
+
+		// Build chown command with sudo
+		var chownCmd strings.Builder
+		chownCmd.WriteString("sudo chown ")
+		chownCmd.WriteString(ownerStr)
+		if groupStr != "" {
+			chownCmd.WriteString(":")
+			chownCmd.WriteString(groupStr)
+		}
+		chownCmd.WriteString(" ")
+		chownCmd.WriteString(plan.Path.ValueString())
+		chownCmd.WriteString(" ")
+		chownCmd.WriteString(publicKeyPath)
+
+		_, err := r.provider.machineAccessClient.RunCommand(ctx, chownCmd.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to set owner and group", err.Error())
+			return
+		}
 	}
 
 	// Update the model with computed values
@@ -200,8 +238,14 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	// If path, key_type, or key_size changed, we need to regenerate the key
 	if !plan.Path.Equal(state.Path) || !plan.KeyType.Equal(state.KeyType) || !plan.KeySize.Equal(state.KeySize) {
-		// Delete old keys first
-		_, _ = r.provider.machineAccessClient.RunCommand(ctx, "rm -f "+state.Path.ValueString()+" "+state.Path.ValueString()+".pub")
+		// Delete old keys first (use sudo if owner was set)
+		var deleteCmd string
+		if !state.Owner.IsNull() && !state.Owner.IsUnknown() {
+			deleteCmd = "sudo rm -f " + state.Path.ValueString() + " " + state.Path.ValueString() + ".pub"
+		} else {
+			deleteCmd = "rm -f " + state.Path.ValueString() + " " + state.Path.ValueString() + ".pub"
+		}
+		_, _ = r.provider.machineAccessClient.RunCommand(ctx, deleteCmd)
 
 		// Set defaults for new key
 		keyType := keyTypeRSA
@@ -251,6 +295,36 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		plan.PublicKey = types.StringValue(strings.TrimSpace(publicKeyContent))
 	}
 
+	// If owner or group changed, update the ownership
+	if !plan.Owner.Equal(state.Owner) || !plan.Group.Equal(state.Group) {
+		if !plan.Owner.IsNull() && !plan.Owner.IsUnknown() {
+			ownerStr := plan.Owner.ValueString()
+			groupStr := ""
+			if !plan.Group.IsNull() && !plan.Group.IsUnknown() {
+				groupStr = plan.Group.ValueString()
+			}
+
+			// Build chown command with sudo
+			var chownCmd strings.Builder
+			chownCmd.WriteString("sudo chown ")
+			chownCmd.WriteString(ownerStr)
+			if groupStr != "" {
+				chownCmd.WriteString(":")
+				chownCmd.WriteString(groupStr)
+			}
+			chownCmd.WriteString(" ")
+			chownCmd.WriteString(plan.Path.ValueString())
+			chownCmd.WriteString(" ")
+			chownCmd.WriteString(plan.Path.ValueString() + ".pub")
+
+			_, err := r.provider.machineAccessClient.RunCommand(ctx, chownCmd.String())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to set owner and group", err.Error())
+				return
+			}
+		}
+	}
+
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 
@@ -270,7 +344,15 @@ func (r *sshKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	// Delete both private and public key files
-	_, err := r.provider.machineAccessClient.RunCommand(ctx, "rm -f "+model.Path.ValueString()+" "+model.Path.ValueString()+".pub")
+	// Use sudo if owner is not the current user
+	var deleteCmd string
+	if !model.Owner.IsNull() && !model.Owner.IsUnknown() {
+		deleteCmd = "sudo rm -f " + model.Path.ValueString() + " " + model.Path.ValueString() + ".pub"
+	} else {
+		deleteCmd = "rm -f " + model.Path.ValueString() + " " + model.Path.ValueString() + ".pub"
+	}
+
+	_, err := r.provider.machineAccessClient.RunCommand(ctx, deleteCmd)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete SSH key", err.Error())
 		return

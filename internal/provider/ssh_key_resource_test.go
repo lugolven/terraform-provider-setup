@@ -105,6 +105,62 @@ func TestSshKeyResource(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("Test SSH key with owner and group", func(t *testing.T) {
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testSSHKeyResourceConfigWithOwnerGroup("/tmp/test_ssh_key_with_owner", "daemon", "daemon"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "path", "/tmp/test_ssh_key_with_owner"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "owner", "daemon"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "group", "daemon"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "key_type", "rsa"),
+						resource.TestMatchResourceAttr("setup_ssh_key.test", "public_key", regexp.MustCompile("^ssh-rsa AAAA")),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return err
+							}
+
+							// Check that both private and public key files have correct ownership
+							output, err := sshClient.RunCommand(context.Background(), "ls -ln /tmp/test_ssh_key_with_owner | awk '{print $3, $4}'")
+							if err != nil {
+								return fmt.Errorf("failed to check key ownership: %w", err)
+							}
+
+							// daemon UID is typically 1, daemon GID is typically 1
+							if !strings.Contains(output, "1") {
+								return fmt.Errorf("expected daemon ownership (UID 1), got: %s", strings.TrimSpace(output))
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
+
+	t.Run("Test SSH key with owner only", func(t *testing.T) {
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testSSHKeyResourceConfigWithOwner("/tmp/test_ssh_key_owner_only", "bin"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "path", "/tmp/test_ssh_key_owner_only"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "owner", "bin"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "key_type", "rsa"),
+						resource.TestMatchResourceAttr("setup_ssh_key.test", "public_key", regexp.MustCompile("^ssh-rsa AAAA")),
+					),
+				},
+			},
+		})
+	})
 }
 
 func testSSHKeyResourceConfig(path, keyType string, keySize int) string {
@@ -132,4 +188,23 @@ resource "setup_ssh_key" "test" {
   path = "%s"
 }
 `, path)
+}
+
+func testSSHKeyResourceConfigWithOwnerGroup(path, owner, group string) string {
+	return fmt.Sprintf(`
+resource "setup_ssh_key" "test" {
+  path  = "%s"
+  owner = "%s"
+  group = "%s"
+}
+`, path, owner, group)
+}
+
+func testSSHKeyResourceConfigWithOwner(path, owner string) string {
+	return fmt.Sprintf(`
+resource "setup_ssh_key" "test" {
+  path  = "%s"
+  owner = "%s"
+}
+`, path, owner)
 }
