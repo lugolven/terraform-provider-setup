@@ -141,6 +141,7 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	// Set owner and group if specified
 	if !plan.Owner.IsNull() && !plan.Owner.IsUnknown() {
 		ownerStr := plan.Owner.ValueString()
+
 		groupStr := ""
 		if !plan.Group.IsNull() && !plan.Group.IsUnknown() {
 			groupStr = plan.Group.ValueString()
@@ -150,10 +151,12 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		var chownCmd strings.Builder
 		chownCmd.WriteString("sudo chown ")
 		chownCmd.WriteString(ownerStr)
+
 		if groupStr != "" {
 			chownCmd.WriteString(":")
 			chownCmd.WriteString(groupStr)
 		}
+
 		chownCmd.WriteString(" ")
 		chownCmd.WriteString(plan.Path.ValueString())
 		chownCmd.WriteString(" ")
@@ -245,6 +248,7 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		} else {
 			deleteCmd = "rm -f " + state.Path.ValueString() + " " + state.Path.ValueString() + ".pub"
 		}
+
 		_, _ = r.provider.machineAccessClient.RunCommand(ctx, deleteCmd)
 
 		// Set defaults for new key
@@ -299,6 +303,7 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if !plan.Owner.Equal(state.Owner) || !plan.Group.Equal(state.Group) {
 		if !plan.Owner.IsNull() && !plan.Owner.IsUnknown() {
 			ownerStr := plan.Owner.ValueString()
+
 			groupStr := ""
 			if !plan.Group.IsNull() && !plan.Group.IsUnknown() {
 				groupStr = plan.Group.ValueString()
@@ -308,10 +313,12 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 			var chownCmd strings.Builder
 			chownCmd.WriteString("sudo chown ")
 			chownCmd.WriteString(ownerStr)
+
 			if groupStr != "" {
 				chownCmd.WriteString(":")
 				chownCmd.WriteString(groupStr)
 			}
+
 			chownCmd.WriteString(" ")
 			chownCmd.WriteString(plan.Path.ValueString())
 			chownCmd.WriteString(" ")
