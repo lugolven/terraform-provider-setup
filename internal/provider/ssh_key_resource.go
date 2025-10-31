@@ -41,6 +41,7 @@ type sshKeyResourceModel struct {
 	PublicKey types.String `tfsdk:"public_key"`
 	Owner     types.String `tfsdk:"owner"`
 	Group     types.String `tfsdk:"group"`
+	Mode      types.String `tfsdk:"mode"`
 }
 
 func (r *sshKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -77,6 +78,10 @@ func (r *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"group": schema.StringAttribute{
 				Optional:    true,
 				Description: "The group of the SSH key files. If not specified, the current group is used",
+			},
+			"mode": schema.StringAttribute{
+				Optional:    true,
+				Description: "The permissions of the SSH key files in octal format (e.g., '0600'). If not specified, defaults to '0600' for private key and '0644' for public key",
 			},
 		},
 	}
@@ -165,6 +170,26 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		_, err := r.provider.machineAccessClient.RunCommand(ctx, chownCmd.String())
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to set owner and group", err.Error())
+			return
+		}
+	}
+
+	// Set file mode if specified
+	if !plan.Mode.IsNull() && !plan.Mode.IsUnknown() {
+		modeStr := plan.Mode.ValueString()
+
+		// Build chmod command with sudo
+		var chmodCmd strings.Builder
+		chmodCmd.WriteString("sudo chmod ")
+		chmodCmd.WriteString(modeStr)
+		chmodCmd.WriteString(" ")
+		chmodCmd.WriteString(plan.Path.ValueString())
+		chmodCmd.WriteString(" ")
+		chmodCmd.WriteString(publicKeyPath)
+
+		_, err := r.provider.machineAccessClient.RunCommand(ctx, chmodCmd.String())
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to set file mode", err.Error())
 			return
 		}
 	}
@@ -327,6 +352,28 @@ func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 			_, err := r.provider.machineAccessClient.RunCommand(ctx, chownCmd.String())
 			if err != nil {
 				resp.Diagnostics.AddError("Failed to set owner and group", err.Error())
+				return
+			}
+		}
+	}
+
+	// If mode changed, update the file permissions
+	if !plan.Mode.Equal(state.Mode) {
+		if !plan.Mode.IsNull() && !plan.Mode.IsUnknown() {
+			modeStr := plan.Mode.ValueString()
+
+			// Build chmod command with sudo
+			var chmodCmd strings.Builder
+			chmodCmd.WriteString("sudo chmod ")
+			chmodCmd.WriteString(modeStr)
+			chmodCmd.WriteString(" ")
+			chmodCmd.WriteString(plan.Path.ValueString())
+			chmodCmd.WriteString(" ")
+			chmodCmd.WriteString(plan.Path.ValueString() + ".pub")
+
+			_, err := r.provider.machineAccessClient.RunCommand(ctx, chmodCmd.String())
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to set file mode", err.Error())
 				return
 			}
 		}
