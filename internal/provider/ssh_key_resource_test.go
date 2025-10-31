@@ -210,6 +210,43 @@ func TestSshKeyResource(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("Test SSH key with mode", func(t *testing.T) {
+		// Act & assert
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: testProviderConfig(setup, "test", "localhost") + testSSHKeyResourceConfigWithMode("/tmp/test_ssh_key_with_mode", "0600"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "path", "/tmp/test_ssh_key_with_mode"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "mode", "0600"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "key_type", "rsa"),
+						resource.TestMatchResourceAttr("setup_ssh_key.test", "public_key", regexp.MustCompile("^ssh-rsa AAAA")),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return err
+							}
+
+							// Check that private key has correct permissions (0600 = -rw-------)
+							output, err := sshClient.RunCommand(context.Background(), "ls -l /tmp/test_ssh_key_with_mode | awk '{print $1}'")
+							if err != nil {
+								return fmt.Errorf("failed to check key permissions: %w", err)
+							}
+
+							expected := "-rw-------"
+							if !strings.Contains(output, expected) {
+								return fmt.Errorf("expected private key permissions '%s', got: %s", expected, strings.TrimSpace(output))
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
 }
 
 func testSSHKeyResourceConfig(path, keyType string, keySize int) string {
@@ -256,4 +293,13 @@ resource "setup_ssh_key" "test" {
   owner = "%s"
 }
 `, path, owner)
+}
+
+func testSSHKeyResourceConfigWithMode(path, mode string) string {
+	return fmt.Sprintf(`
+resource "setup_ssh_key" "test" {
+  path = "%s"
+  mode = "%s"
+}
+`, path, mode)
 }
