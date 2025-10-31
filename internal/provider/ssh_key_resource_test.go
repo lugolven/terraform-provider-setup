@@ -244,6 +244,35 @@ func TestSshKeyResource(t *testing.T) {
 						},
 					),
 				},
+				{
+					// Step 2: Update to change mode to 0660
+					Config: testProviderConfig(setup, "test", "localhost") + testSSHKeyResourceConfigWithMode("/tmp/test_ssh_key_with_mode", "0660"),
+					Check: resource.ComposeTestCheckFunc(
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "path", "/tmp/test_ssh_key_with_mode"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "mode", "0660"),
+						resource.TestCheckResourceAttr("setup_ssh_key.test", "key_type", "rsa"),
+						resource.TestMatchResourceAttr("setup_ssh_key.test", "public_key", regexp.MustCompile("^ssh-rsa AAAA")),
+						func(_ *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return err
+							}
+
+							// Check that private key has correct permissions (0660 = -rw-rw----)
+							output, err := sshClient.RunCommand(context.Background(), "ls -l /tmp/test_ssh_key_with_mode | awk '{print $1}'")
+							if err != nil {
+								return fmt.Errorf("failed to check key permissions: %w", err)
+							}
+
+							expected := "-rw-rw----"
+							if !strings.Contains(output, expected) {
+								return fmt.Errorf("expected private key permissions '%s', got: %s", expected, strings.TrimSpace(output))
+							}
+
+							return nil
+						},
+					),
+				},
 			},
 		})
 	})
