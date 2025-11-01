@@ -106,7 +106,9 @@ func (p *internalProvider) Configure(ctx context.Context, req provider.Configure
 
 // DataSources defines the data sources implemented in the provider.
 func (p *internalProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		p.newFileDataSource,
+	}
 }
 
 // Resources defines the resources implemented in the provider.
@@ -158,4 +160,8 @@ func (p *internalProvider) newSSHKeyResource() resource.Resource {
 
 func (p *internalProvider) newSSHAddResource() resource.Resource {
 	return newSSHAddResource(p)
+}
+
+func (p *internalProvider) newFileDataSource() datasource.DataSource {
+	return newFileDataSource()
 }
