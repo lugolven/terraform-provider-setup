@@ -163,5 +163,5 @@ func (p *internalProvider) newSSHAddResource() resource.Resource {
 }
 
 func (p *internalProvider) newFileDataSource() datasource.DataSource {
-	return newFileDataSource()
+	return newFileDataSource(p)
 }

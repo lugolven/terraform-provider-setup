@@ -15,13 +15,12 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ datasource.DataSource              = &fileDataSource{}
-	_ datasource.DataSourceWithConfigure = &fileDataSource{}
+	_ datasource.DataSource = &fileDataSource{}
 )
 
-func newFileDataSource() datasource.DataSource {
+func newFileDataSource(p *internalProvider) datasource.DataSource {
 	return &fileDataSource{
-		provider: nil,
+		provider: p,
 	}
 }
 
@@ -73,24 +72,6 @@ func (d *fileDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			},
 		},
 	}
-}
-
-func (d *fileDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	provider, ok := req.ProviderData.(*internalProvider)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			"Expected *internalProvider, got: "+string(rune(0)),
-		)
-
-		return
-	}
-
-	d.provider = provider
 }
 
 func (d *fileDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
