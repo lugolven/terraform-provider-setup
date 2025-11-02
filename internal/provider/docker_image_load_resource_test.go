@@ -127,6 +127,190 @@ func TestDockerImageLoadResource(t *testing.T) {
 		})
 	})
 
+	t.Run("Test multiple concurrent docker image loads", func(t *testing.T) {
+		setup := setupTestEnvironment(t)
+
+		tempDir, err := os.MkdirTemp("", "docker-test")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create 5 tar files with different content to force concurrent connections
+		// Using larger content to make the transfer take longer and expose race conditions
+		numResources := 5
+		tarFiles := make([]string, numResources)
+		resourceConfigs := []string{}
+
+		for i := 0; i < numResources; i++ {
+			tarFiles[i] = filepath.Join(tempDir, fmt.Sprintf("test-image-%d.tar", i))
+			// Create larger content to increase transfer time and expose concurrent issues
+			largeContent := strings.Repeat(fmt.Sprintf("image-%d-content-", i), 100)
+			if err := createTestDockerImageTarWithContent(tarFiles[i], largeContent); err != nil {
+				t.Fatalf("Failed to create test tar file %d: %v", i, err)
+			}
+
+			resourceConfigs = append(resourceConfigs, fmt.Sprintf(`
+resource "setup_docker_image_load" "test%d" {
+  tar_file = "%s"
+}`, i, tarFiles[i]))
+		}
+
+		// Define resources that will be created concurrently
+		concurrentResourceConfig := testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + strings.Join(resourceConfigs, "\n")
+
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: concurrentResourceConfig,
+					Check: resource.ComposeTestCheckFunc(
+						// Verify all resources are created and have image_sha attributes set
+						func(s *terraform.State) error {
+							for i := 0; i < numResources; i++ {
+								resourceName := fmt.Sprintf("setup_docker_image_load.test%d", i)
+								rs, ok := s.RootModule().Resources[resourceName]
+								if !ok {
+									return fmt.Errorf("resource not found: %s", resourceName)
+								}
+
+								if rs.Primary.Attributes["tar_file"] != tarFiles[i] {
+									return fmt.Errorf("tar_file mismatch for %s", resourceName)
+								}
+
+								imageSHA := rs.Primary.Attributes["image_sha"]
+								if imageSHA == "" {
+									return fmt.Errorf("image_sha is empty for %s", resourceName)
+								}
+							}
+							return nil
+						},
+						// Verify all images actually exist on the remote Docker daemon
+						func(s *terraform.State) error {
+							// Create a single SSH client for verification
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return fmt.Errorf("failed to create SSH client: %w", err)
+							}
+
+							// Check all images concurrently to stress the tunnel
+							for i := 0; i < numResources; i++ {
+								resourceName := fmt.Sprintf("setup_docker_image_load.test%d", i)
+								rs, ok := s.RootModule().Resources[resourceName]
+								if !ok {
+									return fmt.Errorf("resource not found during verification: %s", resourceName)
+								}
+
+								imageSHA := rs.Primary.Attributes["image_sha"]
+								if imageSHA == "" {
+									return fmt.Errorf("image_sha is empty during verification for %s", resourceName)
+								}
+
+								// This will stress the concurrent tunnel usage
+								_, err := sshClient.RunCommand(context.Background(), fmt.Sprintf("sudo docker inspect %s", imageSHA))
+								if err != nil {
+									return fmt.Errorf("docker image not found for %s (SHA: %s): %w", resourceName, imageSHA, err)
+								}
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
+
+	t.Run("Test concurrent docker image loads with heavy load", func(t *testing.T) {
+		// This test is designed to consistently fail with the SSH tunnel bug
+		// It creates many resources that will cause concurrent Docker API calls
+		// The bug manifests as connection failures or hangs due to shared remoteConn
+		setup := setupTestEnvironment(t)
+
+		tempDir, err := os.MkdirTemp("", "docker-test-heavy")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Create 10 tar files with very large content to force multiple concurrent connections
+		numResources := 10
+		tarFiles := make([]string, numResources)
+		resourceConfigs := []string{}
+
+		for i := 0; i < numResources; i++ {
+			tarFiles[i] = filepath.Join(tempDir, fmt.Sprintf("heavy-image-%d.tar", i))
+			// Create very large content to maximize transfer time and expose the bug
+			largeContent := strings.Repeat(fmt.Sprintf("resource-%d-", i), 500)
+			if err := createTestDockerImageTarWithContent(tarFiles[i], largeContent); err != nil {
+				t.Fatalf("Failed to create test tar file %d: %v", i, err)
+			}
+
+			resourceConfigs = append(resourceConfigs, fmt.Sprintf(`
+resource "setup_docker_image_load" "heavy%d" {
+  tar_file = "%s"
+}`, i, tarFiles[i]))
+		}
+
+		concurrentResourceConfig := testProviderConfig(setup, "test", "localhost") + testDockerSetupConfig(t) + strings.Join(resourceConfigs, "\n")
+
+		resource.Test(t, resource.TestCase{
+			ProtoV6ProviderFactories: getTestProviderFactories(),
+			Steps: []resource.TestStep{
+				{
+					Config: concurrentResourceConfig,
+					Check: resource.ComposeTestCheckFunc(
+						// All resources should be created
+						func(s *terraform.State) error {
+							createdCount := 0
+							for i := 0; i < numResources; i++ {
+								resourceName := fmt.Sprintf("setup_docker_image_load.heavy%d", i)
+								rs, ok := s.RootModule().Resources[resourceName]
+								if !ok {
+									return fmt.Errorf("resource not found: %s", resourceName)
+								}
+
+								imageSHA := rs.Primary.Attributes["image_sha"]
+								if imageSHA == "" {
+									return fmt.Errorf("image_sha is empty for %s", resourceName)
+								}
+								createdCount++
+							}
+
+							if createdCount != numResources {
+								return fmt.Errorf("expected %d resources, got %d", numResources, createdCount)
+							}
+							return nil
+						},
+						// Verify all images exist
+						func(s *terraform.State) error {
+							sshClient, err := clients.CreateSSHMachineAccessClientBuilder("test", "localhost", setup.Port).WithPrivateKeyPath(setup.KeyPath).Build(context.Background())
+							if err != nil {
+								return fmt.Errorf("failed to create SSH client: %w", err)
+							}
+
+							for i := 0; i < numResources; i++ {
+								resourceName := fmt.Sprintf("setup_docker_image_load.heavy%d", i)
+								rs, ok := s.RootModule().Resources[resourceName]
+								if !ok {
+									return fmt.Errorf("resource not found: %s", resourceName)
+								}
+
+								imageSHA := rs.Primary.Attributes["image_sha"]
+								_, err := sshClient.RunCommand(context.Background(), fmt.Sprintf("sudo docker inspect %s", imageSHA))
+								if err != nil {
+									return fmt.Errorf("heavy%d: docker image not found (SHA: %s): %w", i, imageSHA, err)
+								}
+							}
+
+							return nil
+						},
+					),
+				},
+			},
+		})
+	})
+
 	t.Run("Test tar file content change detection", func(t *testing.T) {
 		setup := setupTestEnvironment(t)
 

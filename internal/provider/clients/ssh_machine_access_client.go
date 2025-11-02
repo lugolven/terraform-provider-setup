@@ -284,13 +284,6 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 		listener.Close()
 	}
 
-	// Connect to Docker daemon on the remote host (default Docker socket)
-	remoteConn, err := sshClient.Dial("unix", "/var/run/docker.sock")
-	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket: %v", err))
-		return -1, nil, fmt.Errorf("could not dial /var/run/docker.sock. err=%w", err)
-	}
-
 	// Start forwarding in a goroutine
 	go func() {
 		defer listener.Close()
@@ -313,8 +306,18 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 					}
 				}
 
-				// Handle the connection in another goroutine
-				go sshClient.handlePortForward(ctx, localConn, remoteConn, done)
+				// Create a new remote connection for this incoming local connection
+				// This prevents race conditions when multiple connections are active concurrently
+				go func(incomingConn net.Conn) {
+					remoteConn, err := sshClient.Dial("unix", "/var/run/docker.sock")
+					if err != nil {
+						tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket for incoming connection: %v", err))
+						incomingConn.Close()
+						return
+					}
+
+					sshClient.handlePortForward(ctx, incomingConn, remoteConn, done)
+				}(localConn)
 			}
 		}
 	}()
