@@ -313,6 +313,7 @@ func (sshClient *sshMachineAccessClient) startSSHPortForwarding(ctx context.Cont
 					if err != nil {
 						tflog.Error(ctx, fmt.Sprintf("Failed to connect to remote Docker socket for incoming connection: %v", err))
 						incomingConn.Close()
+
 						return
 					}
 
