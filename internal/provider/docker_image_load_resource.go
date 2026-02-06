@@ -367,7 +367,11 @@ func (d *dockerImageLoadResource) removeImageRemotely(ctx context.Context, image
 		return fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
-	_, err = dockerClient.ImageRemove(ctx, imageSHA, dockertypes.ImageRemoveOptions{})
+	_, err = dockerClient.ImageRemove(ctx, imageSHA, dockertypes.ImageRemoveOptions{
+		// keeping the children in case there are some layers in common for furure updates
+		// TODO: Consider making this an option
+		PruneChildren: false,
+	})
 
 	// If the image doesn't exist, that's not an error - it's already gone
 	if err != nil {
