@@ -10,7 +10,7 @@ RUN apt-get update && \
 RUN useradd -ms /bin/bash test
 
 RUN echo "test:pass" | chpasswd
-RUN groupadd docker
+RUN groupadd -f docker
 RUN usermod -aG docker test 
 
 # Enable password authentication
