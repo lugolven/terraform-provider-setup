@@ -155,11 +155,6 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 		if message.Error != "" {
 			return "", fmt.Errorf("docker build failed: %s", message.Error)
 		}
-
-		// Log build output for debugging
-		if message.Stream != "" {
-			t.Logf("Docker build: %s", strings.TrimSpace(message.Stream))
-		}
 	}
 
 	// Only set the global imageName after the build is completely done
