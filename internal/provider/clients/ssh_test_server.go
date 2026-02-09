@@ -3,6 +3,7 @@ package clients
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -118,11 +119,11 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 
 	buildCtx := bytes.NewBuffer(testServerTar)
 
-	imageName = "test/" + randomString(10)
-	t.Logf("Building image %s", imageName)
+	tempImageName := "test/" + randomString(10)
+	t.Logf("Building image %s", tempImageName)
 
 	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
-		Tags:           []string{imageName},
+		Tags:           []string{tempImageName},
 		Dockerfile:     "Dockerfile",
 		Remove:         true,
 		SuppressOutput: false,
@@ -132,17 +133,38 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 	}
 
 	defer buildResponse.Body.Close()
-	// read buildResponse.Body until EOF
+
+	// Parse the build response to check for errors
+	decoder := json.NewDecoder(buildResponse.Body)
+
 	for {
-		_, err := buildResponse.Body.Read(make([]byte, 1024))
-		if err == io.EOF {
-			break
+		var message struct {
+			Stream string `json:"stream"`
+			Error  string `json:"error"`
 		}
 
-		if err != nil {
-			return "", fmt.Errorf("failed to read build response: %w", err)
+		if err := decoder.Decode(&message); err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return "", fmt.Errorf("failed to decode build response: %w", err)
+		}
+
+		// Check for build errors in the response stream
+		if message.Error != "" {
+			return "", fmt.Errorf("docker build failed: %s", message.Error)
+		}
+
+		// Log build output for debugging
+		if message.Stream != "" {
+			t.Logf("Docker build: %s", strings.TrimSpace(message.Stream))
 		}
 	}
+
+	// Only set the global imageName after the build is completely done
+	imageName = tempImageName
+	t.Logf("Successfully built image %s", imageName)
 
 	return imageName, nil
 }
