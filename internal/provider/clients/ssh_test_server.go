@@ -122,7 +122,10 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 	tempImageName := "test/" + randomString(10)
 	t.Logf("Building image %s", tempImageName)
 
-	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
+	// Use context.Background() instead of t.Context() because this image is shared
+	// across multiple parallel tests. If we use t.Context(), the context will be
+	// cancelled when the first test completes, potentially breaking other tests.
+	buildResponse, err := cli.ImageBuild(context.Background(), buildCtx, types.ImageBuildOptions{
 		Tags:           []string{tempImageName},
 		Dockerfile:     "Dockerfile",
 		Remove:         true,
