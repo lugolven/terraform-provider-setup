@@ -3,7 +3,6 @@ package clients
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -119,14 +118,11 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 
 	buildCtx := bytes.NewBuffer(testServerTar)
 
-	tempImageName := "test/" + randomString(10)
-	t.Logf("Building image %s", tempImageName)
+	imageName = "test/" + randomString(10)
+	t.Logf("Building image %s", imageName)
 
-	// Use context.Background() instead of t.Context() because this image is shared
-	// across multiple parallel tests. If we use t.Context(), the context will be
-	// cancelled when the first test completes, potentially breaking other tests.
-	buildResponse, err := cli.ImageBuild(context.Background(), buildCtx, types.ImageBuildOptions{
-		Tags:           []string{tempImageName},
+	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
+		Tags:           []string{imageName},
 		Dockerfile:     "Dockerfile",
 		Remove:         true,
 		SuppressOutput: false,
@@ -136,33 +132,17 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 	}
 
 	defer buildResponse.Body.Close()
-
-	// Parse the build response to check for errors
-	decoder := json.NewDecoder(buildResponse.Body)
-
+	// read buildResponse.Body until EOF
 	for {
-		var message struct {
-			Stream string `json:"stream"`
-			Error  string `json:"error"`
+		_, err := buildResponse.Body.Read(make([]byte, 1024))
+		if err == io.EOF {
+			break
 		}
 
-		if err := decoder.Decode(&message); err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return "", fmt.Errorf("failed to decode build response: %w", err)
-		}
-
-		// Check for build errors in the response stream
-		if message.Error != "" {
-			return "", fmt.Errorf("docker build failed: %s", message.Error)
+		if err != nil {
+			return "", fmt.Errorf("failed to read build response: %w", err)
 		}
 	}
-
-	// Only set the global imageName after the build is completely done
-	imageName = tempImageName
-	t.Logf("Successfully built image %s", imageName)
 
 	return imageName, nil
 }
