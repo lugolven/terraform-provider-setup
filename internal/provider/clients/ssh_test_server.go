@@ -118,11 +118,14 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 
 	buildCtx := bytes.NewBuffer(testServerTar)
 
-	imageName = "test/" + randomString(10)
-	t.Logf("Building image %s", imageName)
+	tempImageName := "test/" + randomString(10)
+	t.Logf("Building image %s", tempImageName)
 
-	buildResponse, err := cli.ImageBuild(t.Context(), buildCtx, types.ImageBuildOptions{
-		Tags:           []string{imageName},
+	// Use context.Background() instead of t.Context() because this image is shared
+	// across multiple parallel tests. If we use t.Context(), the context will be
+	// cancelled when the first test completes, potentially breaking other tests.
+	buildResponse, err := cli.ImageBuild(context.Background(), buildCtx, types.ImageBuildOptions{
+		Tags:           []string{tempImageName},
 		Dockerfile:     "Dockerfile",
 		Remove:         true,
 		SuppressOutput: false,
@@ -132,17 +135,18 @@ func buildDockerImage(t *testing.T, cli *client.Client) (string, error) {
 	}
 
 	defer buildResponse.Body.Close()
-	// read buildResponse.Body until EOF
-	for {
-		_, err := buildResponse.Body.Read(make([]byte, 1024))
-		if err == io.EOF {
-			break
-		}
 
-		if err != nil {
-			return "", fmt.Errorf("failed to read build response: %w", err)
-		}
+	// Read the build response to ensure the build completes
+	// We don't parse for errors here to keep it simple, but we do need to
+	// consume the entire response to ensure the build finishes
+	_, err = io.Copy(io.Discard, buildResponse.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read build response: %w", err)
 	}
+
+	// Only set the global imageName after the build is completely done
+	imageName = tempImageName
+	t.Logf("Successfully built image %s", imageName)
 
 	return imageName, nil
 }
