@@ -375,13 +375,14 @@ func (d *dockerImageLoadResource) removeImageRemotely(ctx context.Context, image
 
 	// If the image doesn't exist, that's not an error - it's already gone
 	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "unrecognized image ID") ||
-			strings.Contains(errStr, "reference does not exist") ||
-			strings.Contains(errStr, "no such image") ||
-			strings.Contains(errStr, "NotFound") ||
-			strings.Contains(errStr, "not found") {
+		errStrLower := strings.ToLower(err.Error())
+		if strings.Contains(errStrLower, "unrecognized image id") ||
+			strings.Contains(errStrLower, "reference does not exist") ||
+			strings.Contains(errStrLower, "no such image") ||
+			strings.Contains(errStrLower, "notfound") ||
+			strings.Contains(errStrLower, "not found") {
 			tflog.Debug(ctx, fmt.Sprintf("Image %s not found during removal (already deleted)", imageSHA))
+
 			return nil
 		}
 	}
