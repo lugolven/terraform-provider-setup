@@ -336,7 +336,11 @@ func (d *dockerImageLoadResource) loadImageUsingRemoteDocker(ctx context.Context
 	// Parse the output to get the loaded image reference
 	loadedImage := d.parseLoadedImageFromOutput(string(responseBytes))
 	if loadedImage == "" {
-		return "", fmt.Errorf("could not extract loaded image from docker load output: %s", string(responseBytes))
+		// Check if Docker reported the image already exists (concurrent loads of same image)
+		loadedImage = d.parseAlreadyExistsFromOutput(string(responseBytes))
+		if loadedImage == "" {
+			return "", fmt.Errorf("could not extract loaded image from docker load output: %s", string(responseBytes))
+		}
 	}
 
 	// Get the actual SHA of the loaded image using Docker API
@@ -388,6 +392,41 @@ func (d *dockerImageLoadResource) removeImageRemotely(ctx context.Context, image
 	}
 
 	return err
+}
+
+func (d *dockerImageLoadResource) parseAlreadyExistsFromOutput(output string) string {
+	// Docker returns an error JSON like:
+	// {"error":"AlreadyExists: image \"docker.io/library/test:latest\": already exists",...}
+	// when concurrent loads try to load the same image. Extract the image name so we can inspect it.
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		var errOutput struct {
+			Error string `json:"error"`
+		}
+
+		if err := json.Unmarshal([]byte(line), &errOutput); err != nil {
+			continue
+		}
+
+		if !strings.HasPrefix(errOutput.Error, "AlreadyExists: image") {
+			continue
+		}
+
+		// Extract the image name from: AlreadyExists: image "docker.io/library/test:latest": already exists
+		re := regexp.MustCompile(`AlreadyExists: image "([^"]+)"`)
+		if match := re.FindStringSubmatch(errOutput.Error); len(match) > 1 {
+			return match[1]
+		}
+	}
+
+	return ""
 }
 
 func (d *dockerImageLoadResource) parseLoadedImageFromOutput(output string) string {
