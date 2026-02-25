@@ -29,7 +29,7 @@ func TestAptPackagesResource(t *testing.T) {
 						absent bool
 					}{
 						{
-							name:   "curl",
+							name:   "htop",
 							absent: false,
 						},
 						{
@@ -38,7 +38,7 @@ func TestAptPackagesResource(t *testing.T) {
 						},
 					}),
 					Check: resource.ComposeTestCheckFunc(
-						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.name", "curl"),
+						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.name", "htop"),
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.0.absent", "false"),
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.name", "vlc"),
 						resource.TestCheckResourceAttr("setup_apt_packages.packages", "package.1.absent", "true"),
@@ -54,8 +54,8 @@ func TestAptPackagesResource(t *testing.T) {
 								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
 							}
 
-							if !strings.Contains(allPackages, "curl") {
-								return fmt.Errorf("package curl not found")
+							if !strings.Contains(allPackages, "htop") {
+								return fmt.Errorf("package htop not found")
 							}
 
 							if strings.Contains(allPackages, "vlc") {
@@ -91,8 +91,8 @@ func TestAptPackagesResource(t *testing.T) {
 								return fmt.Errorf("error when running ''dpkg -l'': %w", err)
 							}
 
-							if strings.Contains(allPackages, "curl") {
-								return fmt.Errorf("package curl found")
+							if strings.Contains(allPackages, "htop") {
+								return fmt.Errorf("package htop found")
 							}
 
 							if strings.Contains(allPackages, "vlc") {

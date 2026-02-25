@@ -336,7 +336,11 @@ func (d *dockerImageLoadResource) loadImageUsingRemoteDocker(ctx context.Context
 	// Parse the output to get the loaded image reference
 	loadedImage := d.parseLoadedImageFromOutput(string(responseBytes))
 	if loadedImage == "" {
-		return "", fmt.Errorf("could not extract loaded image from docker load output: %s", string(responseBytes))
+		// Check if Docker reported the image already exists (concurrent loads of same image)
+		loadedImage = d.parseAlreadyExistsFromOutput(string(responseBytes))
+		if loadedImage == "" {
+			return "", fmt.Errorf("could not extract loaded image from docker load output: %s", string(responseBytes))
+		}
 	}
 
 	// Get the actual SHA of the loaded image using Docker API
@@ -367,20 +371,62 @@ func (d *dockerImageLoadResource) removeImageRemotely(ctx context.Context, image
 		return fmt.Errorf("failed to create Docker client: %v", err)
 	}
 
-	_, err = dockerClient.ImageRemove(ctx, imageSHA, dockertypes.ImageRemoveOptions{})
+	_, err = dockerClient.ImageRemove(ctx, imageSHA, dockertypes.ImageRemoveOptions{
+		// keeping the children in case there are some layers in common for furure updates
+		// TODO: Consider making this an option
+		PruneChildren: false,
+	})
 
 	// If the image doesn't exist, that's not an error - it's already gone
 	if err != nil {
-		errStr := err.Error()
-		if strings.Contains(errStr, "unrecognized image ID") ||
-			strings.Contains(errStr, "reference does not exist") ||
-			strings.Contains(errStr, "no such image") {
+		errStrLower := strings.ToLower(err.Error())
+		if strings.Contains(errStrLower, "unrecognized image id") ||
+			strings.Contains(errStrLower, "reference does not exist") ||
+			strings.Contains(errStrLower, "no such image") ||
+			strings.Contains(errStrLower, "notfound") ||
+			strings.Contains(errStrLower, "not found") {
 			tflog.Debug(ctx, fmt.Sprintf("Image %s not found during removal (already deleted)", imageSHA))
+
 			return nil
 		}
 	}
 
 	return err
+}
+
+func (d *dockerImageLoadResource) parseAlreadyExistsFromOutput(output string) string {
+	// Docker returns an error JSON like:
+	// {"error":"AlreadyExists: image \"docker.io/library/test:latest\": already exists",...}
+	// when concurrent loads try to load the same image. Extract the image name so we can inspect it.
+	lines := strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+
+		var errOutput struct {
+			Error string `json:"error"`
+		}
+
+		if err := json.Unmarshal([]byte(line), &errOutput); err != nil {
+			continue
+		}
+
+		if !strings.HasPrefix(errOutput.Error, "AlreadyExists: image") {
+			continue
+		}
+
+		// Extract the image name from: AlreadyExists: image "docker.io/library/test:latest": already exists
+		re := regexp.MustCompile(`AlreadyExists: image "([^"]+)"`)
+		if match := re.FindStringSubmatch(errOutput.Error); len(match) > 1 {
+			return match[1]
+		}
+	}
+
+	return ""
 }
 
 func (d *dockerImageLoadResource) parseLoadedImageFromOutput(output string) string {

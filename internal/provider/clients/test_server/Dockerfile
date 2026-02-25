@@ -3,6 +3,10 @@
 FROM cruizba/ubuntu-dind:latest
 
 # Install SSH server
+# Remove pre-configured docker apt sources from the base image so tests can
+# add their own without triggering "Conflicting values set for Signed-By" errors
+RUN rm -f /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.asc
+
 RUN apt-get update && \
     apt-get install -y ssh lsof && \
     apt-get clean
@@ -10,7 +14,7 @@ RUN apt-get update && \
 RUN useradd -ms /bin/bash test
 
 RUN echo "test:pass" | chpasswd
-RUN groupadd docker
+RUN groupadd -f docker
 RUN usermod -aG docker test 
 
 # Enable password authentication
