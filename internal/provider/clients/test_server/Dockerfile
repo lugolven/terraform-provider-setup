@@ -1,6 +1,9 @@
 
 # todo: test this with other images such as debian
-FROM cruizba/ubuntu-dind:latest
+# Pinned to a known-good tag instead of :latest. The floating :latest tag
+# drifted (currently a 29.6.x rebuild) and broke the acceptance-test image
+# build; jammy-29.1.1 is the last release from the window when CI was green.
+FROM cruizba/ubuntu-dind:jammy-29.1.1
 
 # Install SSH server
 # Remove pre-configured docker apt sources from the base image so tests can
