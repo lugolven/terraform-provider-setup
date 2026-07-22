@@ -25,6 +25,8 @@ type sshMachineAccessClientBuilder struct {
 
 	agent          *string
 	privateKeyPath *string
+
+	maxConcurrentSessions int
 }
 
 // CreateSSHMachineAccessClientBuilder creates an SSH machine access client builder
@@ -43,6 +45,14 @@ func (builder *sshMachineAccessClientBuilder) WithAgent(agent string) *sshMachin
 
 func (builder *sshMachineAccessClientBuilder) WithPrivateKeyPath(privateKeyPath string) *sshMachineAccessClientBuilder {
 	builder.privateKeyPath = &privateKeyPath
+	return builder
+}
+
+// WithMaxConcurrentSessions bounds how many SSH sessions the resulting client
+// opens against the target host at once. A value <= 0 disables the limit
+// (unbounded, the historical behavior).
+func (builder *sshMachineAccessClientBuilder) WithMaxConcurrentSessions(maxConcurrentSessions int) *sshMachineAccessClientBuilder {
+	builder.maxConcurrentSessions = maxConcurrentSessions
 	return builder
 }
 
@@ -100,8 +110,14 @@ func (builder *sshMachineAccessClientBuilder) Build(ctx context.Context) (Machin
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
 
+	var sem chan struct{}
+	if builder.maxConcurrentSessions > 0 {
+		sem = make(chan struct{}, builder.maxConcurrentSessions)
+	}
+
 	return &sshMachineAccessClient{
 		Client:             conn,
+		sem:                sem,
 		dockerClientLocker: &sync.Mutex{},
 	}, nil
 }
@@ -127,12 +143,50 @@ func publicKeyFile(file string) (ssh.AuthMethod, error) {
 
 type sshMachineAccessClient struct {
 	*ssh.Client
+	sem                chan struct{} // nil => unlimited
 	dockerClient       *dockerClient.Client
 	dockerClientLocker sync.Locker
 	dockerClientErr    error
 }
 
+// acquire blocks until a session slot is free or ctx is cancelled. The returned
+// func releases the slot and must always be called. When the client is
+// unbounded (sem == nil) it is a no-op. Every SSH-session open on this client
+// (RunCommand, and the scp-backed WriteFile/CopyFile) must go through acquire so
+// the provider never overruns the host sshd's MaxSessions.
+func (sshClient *sshMachineAccessClient) acquire(ctx context.Context) (func(), error) {
+	if sshClient.sem == nil {
+		return func() {}, nil
+	}
+
+	select {
+	case sshClient.sem <- struct{}{}:
+		return func() { <-sshClient.sem }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// withSessionSlot acquires a session slot, runs fn, then releases the slot. Use
+// it to bound operations that open an SSH session outside of RunCommand (e.g.
+// scp copies).
+func (sshClient *sshMachineAccessClient) withSessionSlot(ctx context.Context, fn func() error) error {
+	release, err := sshClient.acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	return fn()
+}
+
 func (sshClient *sshMachineAccessClient) RunCommand(ctx context.Context, command string) (string, error) {
+	release, err := sshClient.acquire(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+
 	session, err := sshClient.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
@@ -183,8 +237,12 @@ func (sshClient *sshMachineAccessClient) WriteFile(ctx context.Context, path str
 	f, _ := os.Open(tmpFile.Name())
 	remoteTmpFile, _ := os.CreateTemp("", "tempfile")
 
-	err = scpClient.CopyFromFile(ctx, *f, remoteTmpFile.Name(), "0700")
-	if err != nil {
+	// scp opens its own SSH session under the hood, so bound it too. Acquire only
+	// around the copy (not the RunCommand calls below, which acquire on their own)
+	// to avoid nesting slots and deadlocking at low limits.
+	if err := sshClient.withSessionSlot(ctx, func() error {
+		return scpClient.CopyFromFile(ctx, *f, remoteTmpFile.Name(), "0700")
+	}); err != nil {
 		return fmt.Errorf("failed to copy file to remote host: %w", err)
 	}
 
@@ -223,8 +281,10 @@ func (sshClient *sshMachineAccessClient) CopyFile(ctx context.Context, localPath
 	}
 	defer f.Close()
 
-	err = scpClient.CopyFromFile(ctx, *f, remotePath, "0644")
-	if err != nil {
+	// scp opens its own SSH session under the hood, so bound it with a slot.
+	if err := sshClient.withSessionSlot(ctx, func() error {
+		return scpClient.CopyFromFile(ctx, *f, remotePath, "0644")
+	}); err != nil {
 		return fmt.Errorf("failed to copy file to remote host: %w", err)
 	}
 
