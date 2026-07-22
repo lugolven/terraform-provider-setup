@@ -26,15 +26,20 @@ jobs:
     # The acceptance tests (terraform-plugin-testing) otherwise auto-install the
     # Terraform CLI via hc-install, which currently fails signature verification
     # because HashiCorp's release GPG key expired ("openpgp: key expired").
-    # Install OpenTofu (signed with its own keys) and point the tests at it via
-    # TF_ACC_TERRAFORM_PATH so hc-install is never invoked.
-    - name: Set up OpenTofu
-      uses: opentofu/setup-opentofu@v1
-      with:
-        tofu_wrapper: false
+    # Download the Terraform binary directly (HTTPS only, no signature check) and
+    # point the tests at it via TF_ACC_TERRAFORM_PATH so hc-install is never
+    # invoked. Terraform (not OpenTofu) is used because the tests rely on the
+    # dev_overrides in test/test.tfrc, which OpenTofu rejects with an "invalid
+    # provider namespace" error.
+    - name: Install Terraform CLI
+      run: |
+        TF_VERSION=1.9.8
+        curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
+        sudo unzip -o /tmp/terraform.zip -d /usr/local/bin
+        terraform version
 
     - name: ci
-      run: TF_ACC_TERRAFORM_PATH="$(command -v tofu)" make ci
+      run: TF_ACC_TERRAFORM_PATH="$(command -v terraform)" make ci
 
   release:
     runs-on: ubuntu-latest
