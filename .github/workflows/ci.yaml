@@ -21,7 +21,12 @@ jobs:
     - name: Set up Docker
       uses: docker/setup-docker-action@v4
       with:
-        version: 'latest'
+        # Pin to a Docker version that defaults to the classic image store.
+        # Docker 28+ enables the containerd snapshotter by default, under which
+        # the SSH test harness' legacy ImageBuild does not register the image
+        # tag that ContainerCreate later looks up, so the acceptance tests fail
+        # with "No such image". 27.x keeps the containerd store opt-in.
+        version: 'v27.5.1'
 
     - name: ci
       run: make ci
