@@ -23,8 +23,18 @@ jobs:
       with:
         version: 'latest'
 
+    # The acceptance tests (terraform-plugin-testing) otherwise auto-install the
+    # Terraform CLI via hc-install, which currently fails signature verification
+    # because HashiCorp's release GPG key expired ("openpgp: key expired").
+    # Install OpenTofu (signed with its own keys) and point the tests at it via
+    # TF_ACC_TERRAFORM_PATH so hc-install is never invoked.
+    - name: Set up OpenTofu
+      uses: opentofu/setup-opentofu@v1
+      with:
+        tofu_wrapper: false
+
     - name: ci
-      run: make ci
+      run: TF_ACC_TERRAFORM_PATH="$(command -v tofu)" make ci
 
   release:
     runs-on: ubuntu-latest
